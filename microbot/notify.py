@@ -43,7 +43,7 @@ def notify_summary(signals: int, top_candidates: list, equity: float):
     if signals > 0:
         title = f"📈 microbot — {signals} Signal{'s' if signals > 1 else ''} Today!"
         body = "\n".join(
-            f"• {s['symbol']} / {s['strategy']}  entry ${s['entry']}"
+            f"• {s['symbol']} / {s['strategy']}  score {s.get('score', '')}"
             for s in top_candidates[:3]
         )
         urgency = "normal"
