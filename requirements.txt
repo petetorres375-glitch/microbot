@@ -1,0 +1,9 @@
+alpaca-py>=0.42
+pandas>=2.0
+numpy>=1.24
+python-dotenv>=1.0
+streamlit>=1.30
+matplotlib>=3.7        # analyzer charts
+openpyxl>=3.1          # analyzer Excel export
+gspread>=6.0           # optional: Google Sheets tracking
+gspread-dataframe>=4.0 # optional: analyzer push_to_sheets

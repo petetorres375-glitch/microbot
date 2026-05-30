@@ -1,0 +1,8 @@
+.venv/
+.env
+*.db
+*.png
+*.xlsx
+__pycache__/
+service_account.json
+*.log
