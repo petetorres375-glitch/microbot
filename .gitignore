@@ -6,3 +6,5 @@
 __pycache__/
 service_account.json
 *.log
+# optimizer_proposals.json is intentionally tracked (remote agent pushes it)
+
