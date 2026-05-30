@@ -26,7 +26,7 @@ from . import notify
 from . import splits
 from .risk import RiskConfig, size_trade
 from .screener import research
-from .strategies import Signal
+from .strategies import Signal, build_strategies_from_params
 from . import tracker_gsheets
 
 
@@ -78,8 +78,16 @@ def run_once(research_only: bool = False, push_sheets: bool = False):
         print("  ! PDT flag set & equity < $25k — day trades are restricted. "
               "Favor swing (overnight) holds.")
 
+    # Load any approved parameter improvements from the DB.
+    active_params = journal.fetch_active_params()
+    if active_params:
+        print(f"  using promoted params for: {', '.join(active_params)}")
+    default_strats = build_strategies_from_params(active_params, rr=settings.reward_risk_ratio)
+    div_strats = build_strategies_from_params(active_params, rr=settings.reward_risk_ratio,
+                                              dividend=True)
+
     print("\nResearching universe (backtest + rank)...")
-    result = research()
+    result = research(default_strats=default_strats, div_strats=div_strats)
     print(f"  top candidates: " + ", ".join(
         f"{r['symbol']}/{r['strategy']}({r['score']})"
         for r in result["rankings"][:5] if r["score"] > 0) or "  (none scored > 0)")

@@ -48,6 +48,20 @@ CREATE TABLE IF NOT EXISTS split_adjustments (
     symbol TEXT, split_type TEXT, ratio REAL, ex_date TEXT,
     applied_ts TEXT
 );
+CREATE TABLE IF NOT EXISTS active_params (
+    strategy TEXT PRIMARY KEY,
+    params_json TEXT,
+    promoted_ts TEXT
+);
+CREATE TABLE IF NOT EXISTS param_proposals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts TEXT, strategy TEXT,
+    proposed_params_json TEXT, current_params_json TEXT,
+    is_score REAL, oos_score REAL, current_oos_score REAL,
+    improvement_pct REAL,
+    status TEXT DEFAULT 'pending',
+    decided_ts TEXT, note TEXT
+);
 """
 
 
@@ -236,4 +250,75 @@ def mark_split_applied(symbol: str, ratio: float, ex_date, split_type: str):
             "INSERT INTO split_adjustments(symbol,split_type,ratio,ex_date,applied_ts)"
             " VALUES(?,?,?,?,?)",
             (symbol, split_type, ratio, ex_str, _now()),
+        )
+
+
+# ---- parameter proposal / active params ----
+
+def fetch_active_params() -> Dict:
+    """Returns {strategy_name: params_dict} for all promoted strategies."""
+    import json as _json
+    with _conn() as con:
+        rows = con.execute("SELECT strategy, params_json FROM active_params").fetchall()
+    return {r["strategy"]: _json.loads(r["params_json"]) for r in rows}
+
+
+def save_param_proposal(p: Dict) -> int:
+    """Saves an optimizer proposal. Returns the new proposal id."""
+    import json as _json
+    with _conn() as con:
+        cur = con.execute(
+            "INSERT INTO param_proposals"
+            "(ts,strategy,proposed_params_json,current_params_json,"
+            "is_score,oos_score,current_oos_score,improvement_pct,status)"
+            " VALUES(?,?,?,?,?,?,?,?,'pending')",
+            (_now(), p["strategy"],
+             _json.dumps(p["proposed_params"]),
+             _json.dumps(p["current_params"]),
+             p["is_score"], p["oos_score"],
+             p["current_oos_score"], p["improvement_pct"]),
+        )
+        return cur.lastrowid
+
+
+def fetch_pending_proposals() -> List[Dict]:
+    with _conn() as con:
+        return [dict(r) for r in con.execute(
+            "SELECT * FROM param_proposals WHERE status='pending' ORDER BY improvement_pct DESC"
+        )]
+
+
+def get_proposal(proposal_id: int) -> Dict | None:
+    with _conn() as con:
+        row = con.execute(
+            "SELECT * FROM param_proposals WHERE id=?", (proposal_id,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def approve_param_proposal(proposal_id: int) -> bool:
+    """Promote proposed params to active_params. Returns True on success."""
+    import json as _json
+    p = get_proposal(proposal_id)
+    if not p or p["status"] != "pending":
+        return False
+    with _conn() as con:
+        con.execute(
+            "INSERT INTO active_params(strategy,params_json,promoted_ts)"
+            " VALUES(?,?,?) ON CONFLICT(strategy) DO UPDATE SET"
+            " params_json=excluded.params_json, promoted_ts=excluded.promoted_ts",
+            (p["strategy"], p["proposed_params_json"], _now()),
+        )
+        con.execute(
+            "UPDATE param_proposals SET status='approved', decided_ts=? WHERE id=?",
+            (_now(), proposal_id),
+        )
+    return True
+
+
+def reject_param_proposal(proposal_id: int, note: str = ""):
+    with _conn() as con:
+        con.execute(
+            "UPDATE param_proposals SET status='rejected', decided_ts=?, note=? WHERE id=?",
+            (_now(), note, proposal_id),
         )

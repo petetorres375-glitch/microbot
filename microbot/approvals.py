@@ -18,6 +18,7 @@ The dashboard also exposes Approve/Reject buttons.
 from __future__ import annotations
 
 import argparse
+import json
 
 from . import journal
 from .broker import Broker
@@ -100,10 +101,64 @@ def _interactive():
             print("       skipped (stays pending)")
 
 
+# ---- parameter proposal review ----
+
+def pending_proposals():
+    journal.init()
+    return journal.fetch_pending_proposals()
+
+
+def approve_proposal_params(proposal_id: int) -> dict:
+    journal.init()
+    ok = journal.approve_param_proposal(proposal_id)
+    if ok:
+        return {"ok": True, "msg": f"proposal #{proposal_id} approved and promoted to active params"}
+    return {"ok": False, "msg": f"proposal #{proposal_id} not found or not pending"}
+
+
+def reject_proposal_params(proposal_id: int, note: str = "user rejected") -> dict:
+    journal.init()
+    p = journal.get_proposal(proposal_id)
+    if not p or p["status"] != "pending":
+        return {"ok": False, "msg": "not pending"}
+    journal.reject_param_proposal(proposal_id, note)
+    return {"ok": True, "msg": f"rejected #{proposal_id}"}
+
+
+def _interactive_params():
+    rows = pending_proposals()
+    if not rows:
+        print("No parameter proposals awaiting review.")
+        return
+    print(f"{len(rows)} parameter proposal(s) awaiting review:\n")
+    for p in rows:
+        proposed = json.loads(p["proposed_params_json"])
+        current = json.loads(p["current_params_json"])
+        print(f"  #{p['id']}  {p['strategy']}  +{p['improvement_pct']:.1f}% OOS")
+        print(f"       OOS score: {p['oos_score']:.3f}  (current: {p['current_oos_score']:.3f})")
+        print(f"       proposed params: {json.dumps(proposed)}")
+        print(f"       current  params: {json.dumps(current)}")
+        ans = input(f"       approve #{p['id']}? [y]es / [n]o / [s]kip / [q]uit: ").strip().lower()
+        if ans in ("q", "quit"):
+            break
+        if ans in ("y", "yes"):
+            print("      ", approve_proposal_params(p["id"])["msg"])
+        elif ans in ("n", "no"):
+            print("      ", reject_proposal_params(p["id"])["msg"])
+        else:
+            print("       skipped (stays pending)")
+
+
 def main():
-    p = argparse.ArgumentParser(description="review trades awaiting approval")
-    p.add_argument("--list", action="store_true", help="list pending and exit")
+    p = argparse.ArgumentParser(description="review trades and optimizer proposals")
+    p.add_argument("--list", action="store_true", help="list pending trades and exit")
+    p.add_argument("--params", action="store_true",
+                   help="review pending parameter improvement proposals")
     args = p.parse_args()
+
+    if args.params:
+        _interactive_params()
+        return
     if args.list:
         for a in pending():
             print(f"#{a['id']}  {a['qty']}x {a['symbol']} ({a['strategy']})  "

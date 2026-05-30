@@ -23,7 +23,7 @@ from typing import Dict, List
 from .backtest import backtest_symbol
 from .data import MarketData
 from . import metrics
-from .strategies import build_default_strategies, build_dividend_strategies
+from .strategies import build_default_strategies, build_dividend_strategies, build_strategies_from_params
 from .config import settings
 
 
@@ -69,7 +69,9 @@ def _scan_symbols(md: MarketData, symbols: List[str], strategies, rr: float,
 
 
 def research(universe: List[str] | None = None, rr: float | None = None,
-             min_trades: int = 8) -> Dict:
+             min_trades: int = 8,
+             default_strats: list | None = None,
+             div_strats: list | None = None) -> Dict:
     universe = universe or settings.universe
     rr = rr or settings.reward_risk_ratio
     md = MarketData()
@@ -90,8 +92,11 @@ def research(universe: List[str] | None = None, rr: float | None = None,
                 all_symbols.append(sym)
 
     # Dividend symbols get the dividend-tuned strategy set; others get the default.
-    default_strats = build_default_strategies(rr=rr)
-    div_strats = build_dividend_strategies(rr=rr)
+    # Callers (e.g. engine) may inject pre-built strategies from active DB params.
+    if default_strats is None:
+        default_strats = build_default_strategies(rr=rr)
+    if div_strats is None:
+        div_strats = build_dividend_strategies(rr=rr)
 
     non_div = [s for s in all_symbols if s not in dividend_set]
     div_only = [s for s in all_symbols if s in dividend_set]

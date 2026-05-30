@@ -26,6 +26,18 @@ def notify(message: str):
     _desktop("🔔 microbot — Action Required", message, urgency="critical", icon="dialog-warning")
 
 
+def notify_proposals(proposals: list, msg: str = ""):
+    """Called when the optimizer finds new parameter improvements to review."""
+    count = len(proposals)
+    title = f"microbot optimizer — {count} improvement{'s' if count > 1 else ''} ready"
+    body = (msg or "\n".join(
+        f"• {p['strategy']}  +{p['improvement_pct']:.1f}% OOS"
+        for p in proposals
+    )) + "\nRun: python -m microbot.approvals --params"
+    print(f"\n🔬 {title}\n   {body}\n")
+    _desktop(title, body, urgency="normal", icon="dialog-information")
+
+
 def notify_summary(signals: int, top_candidates: list, equity: float):
     """Called at end of every engine run with a daily summary pop-up."""
     if signals > 0:

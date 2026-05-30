@@ -223,3 +223,18 @@ def build_default_strategies(rr: float = 2.0):
 def build_dividend_strategies(rr: float = 2.0):
     """Strategies applied to the dividend universe (includes the standard set too)."""
     return [DividendMomentum(rr=rr), TrendMomentum(rr=rr), MeanReversion(rr=rr)]
+
+
+def build_strategies_from_params(active: dict, rr: float = 2.0,
+                                  dividend: bool = False) -> list:
+    """
+    Build strategy objects using params from the active_params DB table.
+    Falls back to each strategy's hardcoded defaults for any key not stored.
+    active: {strategy_name: {param: value, ...}} as returned by journal.fetch_active_params().
+    """
+    def _make(cls):
+        return cls(rr=rr, **active.get(cls.name, {}))
+
+    if dividend:
+        return [_make(DividendMomentum), _make(TrendMomentum), _make(MeanReversion)]
+    return [_make(TrendMomentum), _make(MeanReversion), _make(Breakout)]
