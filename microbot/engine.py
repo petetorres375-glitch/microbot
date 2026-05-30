@@ -144,6 +144,12 @@ def run_once(research_only: bool = False, push_sheets: bool = False):
         notify.notify(f"microbot has {queued} trade(s) awaiting your approval. "
                       f"Review: `python -m microbot.approvals` or the dashboard.")
 
+    notify.notify_summary(
+        signals=len(result["live_signals"]),
+        top_candidates=result["rankings"][:3],
+        equity=acct["equity"],
+    )
+
     return result
 
 
