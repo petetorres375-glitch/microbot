@@ -23,21 +23,15 @@ from typing import Dict, List
 from .backtest import backtest_symbol
 from .data import MarketData
 from . import metrics
-from .strategies import build_default_strategies
+from .strategies import build_default_strategies, build_dividend_strategies
 from .config import settings
 
 
-def research(universe: List[str] | None = None, rr: float | None = None,
-             min_trades: int = 8) -> Dict:
-    universe = universe or settings.universe
-    rr = rr or settings.reward_risk_ratio
-    md = MarketData()
-    strategies = build_default_strategies(rr=rr)
-
+def _scan_symbols(md: MarketData, symbols: List[str], strategies, rr: float,
+                  min_trades: int, dividend_set: set) -> tuple[List[Dict], List[Dict]]:
     rankings: List[Dict] = []
     live_signals: List[Dict] = []
-
-    for symbol in universe:
+    for symbol in symbols:
         symbol = symbol.strip().upper()
         try:
             df = md.bars(symbol)
@@ -47,6 +41,7 @@ def research(universe: List[str] | None = None, rr: float | None = None,
         if df is None or df.empty or len(df) < 60:
             continue
 
+        is_div = symbol in dividend_set
         for strat in strategies:
             trades = backtest_symbol(strat, symbol, df)
             m = metrics.compute(trades)
@@ -59,17 +54,50 @@ def research(universe: List[str] | None = None, rr: float | None = None,
                 "expectancy_r": m["expectancy_r"],
                 "profit_factor": m["profit_factor"],
                 "max_dd_R": m["max_drawdown"], "score": score,
+                "dividend": is_div,
             })
 
-            # Does this strategy fire on the most recent bar?
             sig = strat.evaluate(symbol, df)
             if sig is not None and score > 0:
                 live_signals.append({
                     "symbol": symbol, "strategy": strat.name,
                     "entry": sig.entry, "stop": sig.stop, "target": sig.target,
                     "reason": sig.reason, "score": score,
+                    "dividend": is_div,
                 })
+    return rankings, live_signals
+
+
+def research(universe: List[str] | None = None, rr: float | None = None,
+             min_trades: int = 8) -> Dict:
+    universe = universe or settings.universe
+    rr = rr or settings.reward_risk_ratio
+    md = MarketData()
+
+    # Build the combined symbol list, deduplicating while preserving order.
+    dividend_set: set = set()
+    all_symbols: List[str] = list(universe)
+    if settings.include_dividend_stocks:
+        for sym in settings.dividend_universe:
+            sym = sym.strip().upper()
+            dividend_set.add(sym)
+            if sym not in all_symbols:
+                all_symbols.append(sym)
+
+    # Dividend symbols get the dividend-tuned strategy set; others get the default.
+    default_strats = build_default_strategies(rr=rr)
+    div_strats = build_dividend_strategies(rr=rr)
+
+    non_div = [s for s in all_symbols if s not in dividend_set]
+    div_only = [s for s in all_symbols if s in dividend_set]
+
+    r1, s1 = _scan_symbols(md, non_div, default_strats, rr, min_trades, dividend_set)
+    r2, s2 = _scan_symbols(md, div_only, div_strats, rr, min_trades, dividend_set)
+
+    rankings = r1 + r2
+    live_signals = s1 + s2
 
     rankings.sort(key=lambda r: r["score"], reverse=True)
     live_signals.sort(key=lambda r: r["score"], reverse=True)
-    return {"rankings": rankings, "live_signals": live_signals}
+    return {"rankings": rankings, "live_signals": live_signals,
+            "dividend_universe": list(dividend_set)}

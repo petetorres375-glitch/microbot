@@ -163,13 +163,63 @@ class Breakout(Strategy):
         return None
 
 
+class DividendMomentum(Strategy):
+    """
+    Designed for slow-trending, low-volatility dividend stocks.
+
+    Uses longer EMAs (50/100) and a lower ADX threshold (15) because dividend
+    names trend gradually. Stop is widened to 2x ATR to avoid getting shaken
+    out by yield-driven day-to-day noise. Adds an RSI < 65 gate so we don't
+    chase after a run-up that has already priced in the next dividend.
+    """
+    name = "dividend_momentum"
+
+    def __init__(self, fast=50, slow=100, adx_min=15, rsi_max=65, **kw):
+        kw.setdefault("stop_mult", 2.0)
+        super().__init__(**kw)
+        self.fast, self.slow = fast, slow
+        self.adx_min, self.rsi_max = adx_min, rsi_max
+
+    def min_bars(self):
+        return self.slow + self.atr_period + 5
+
+    def evaluate(self, symbol, df):
+        if len(df) < self.min_bars():
+            return None
+        close = df["close"]
+        fast = ind.ema(close, self.fast)
+        slow = ind.ema(close, self.slow)
+        adx_val = ind.adx(df, 14)
+        rsi_val = ind.rsi(close, 14)
+        a = ind.atr(df, self.atr_period).iloc[-1]
+
+        in_uptrend = fast.iloc[-1] > slow.iloc[-1] and close.iloc[-1] > slow.iloc[-1]
+        crossed_up = fast.iloc[-2] <= slow.iloc[-2] and fast.iloc[-1] > slow.iloc[-1]
+        trending = adx_val.iloc[-1] >= self.adx_min
+        not_overbought = rsi_val.iloc[-1] < self.rsi_max
+        pullback = in_uptrend and close.iloc[-1] <= fast.iloc[-1] * 1.02
+
+        if (crossed_up or pullback) and trending and not_overbought:
+            why = (f"EMA{self.fast}>{self.slow}, ADX={adx_val.iloc[-1]:.0f}, "
+                   f"RSI={rsi_val.iloc[-1]:.0f} (div play)")
+            return _bracket(symbol, self.name, close.iloc[-1], a,
+                            self.stop_mult, self.rr, why)
+        return None
+
+
 # Registry so config / dashboard can reference strategies by name.
 ALL_STRATEGIES = {
     TrendMomentum.name: TrendMomentum,
     MeanReversion.name: MeanReversion,
     Breakout.name: Breakout,
+    DividendMomentum.name: DividendMomentum,
 }
 
 
 def build_default_strategies(rr: float = 2.0):
     return [TrendMomentum(rr=rr), MeanReversion(rr=rr), Breakout(rr=rr)]
+
+
+def build_dividend_strategies(rr: float = 2.0):
+    """Strategies applied to the dividend universe (includes the standard set too)."""
+    return [DividendMomentum(rr=rr), TrendMomentum(rr=rr), MeanReversion(rr=rr)]

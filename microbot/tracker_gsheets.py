@@ -30,6 +30,7 @@ _COL_COLORS_WL = [
     {"red": 0.98, "green": 0.96, "blue": 0.68},  # Profit Fac  — light yellow
     {"red": 0.95, "green": 0.75, "blue": 0.75},  # Max DD      — light red
     {"red": 0.75, "green": 0.85, "blue": 0.98},  # Score       — light sky
+    {"red": 0.88, "green": 0.98, "blue": 0.78},  # Dividend    — light lime
 ]
 
 _COL_COLORS_SG = [
@@ -39,6 +40,7 @@ _COL_COLORS_SG = [
     {"red": 0.95, "green": 0.75, "blue": 0.75},  # Stop        — light red
     {"red": 0.68, "green": 0.90, "blue": 0.80},  # Target      — light mint
     {"red": 0.75, "green": 0.85, "blue": 0.98},  # Score       — light sky
+    {"red": 0.88, "green": 0.98, "blue": 0.78},  # Dividend    — light lime
     {"red": 0.90, "green": 0.88, "blue": 0.98},  # Reason      — light lavender
 ]
 
@@ -142,17 +144,17 @@ def _ensure_ws(sh, title: str, headers: List[str]):
 
 def _format_watchlist(ws, row_count: int):
     ws.freeze(rows=1)
-    _format_header_cells(ws, _COL_COLORS_WL, 8)
-    _format_data_rows(ws, row_count, 8)
-    _col_widths(ws, [100, 160, 80, 100, 120, 120, 110, 90])
+    _format_header_cells(ws, _COL_COLORS_WL, 9)
+    _format_data_rows(ws, row_count, 9)
+    _col_widths(ws, [100, 160, 80, 100, 120, 120, 110, 90, 80])
     _row_height(ws, 1, row_count + 1, 32)
 
 
 def _format_signals(ws, row_count: int):
     ws.freeze(rows=1)
-    _format_header_cells(ws, _COL_COLORS_SG, 7)
-    _format_data_rows(ws, row_count, 7)
-    _col_widths(ws, [100, 160, 90, 90, 90, 90, 320])
+    _format_header_cells(ws, _COL_COLORS_SG, 8)
+    _format_data_rows(ws, row_count, 8)
+    _col_widths(ws, [100, 160, 90, 90, 90, 90, 80, 320])
     _row_height(ws, 1, max(row_count + 1, 2), 32)
 
 
@@ -168,20 +170,22 @@ def push_research(result: Dict) -> bool:
 
     # Watchlist / rankings tab
     rk_headers = ["Symbol", "Strategy", "Trades", "Win Rate",
-                  "Expectancy R", "Profit Factor", "Max DD (R)", "Score"]
+                  "Expectancy R", "Profit Factor", "Max DD (R)", "Score", "Dividend"]
     ws = _ensure_ws(sh, "Watchlist", rk_headers)
     rk_keys = ["symbol", "strategy", "trades", "win_rate",
-               "expectancy_r", "profit_factor", "max_dd_R", "score"]
-    rows = [[r.get(k) for k in rk_keys] for r in result["rankings"][:50]]
+               "expectancy_r", "profit_factor", "max_dd_R", "score", "dividend"]
+    rows = [[("YES" if r.get(k) else ("" if k == "dividend" else r.get(k))) if k == "dividend"
+             else r.get(k) for k in rk_keys] for r in result["rankings"][:50]]
     if rows:
         ws.append_rows(rows)
     _format_watchlist(ws, len(rows))
 
     # Live signals tab
-    sg_headers = ["Symbol", "Strategy", "Entry", "Stop", "Target", "Score", "Reason"]
+    sg_headers = ["Symbol", "Strategy", "Entry", "Stop", "Target", "Score", "Dividend", "Reason"]
     ws2 = _ensure_ws(sh, "LiveSignals", sg_headers)
-    sg_keys = ["symbol", "strategy", "entry", "stop", "target", "score", "reason"]
-    rows2 = [[s.get(k) for k in sg_keys] for s in result["live_signals"]]
+    sg_keys = ["symbol", "strategy", "entry", "stop", "target", "score", "dividend", "reason"]
+    rows2 = [[("YES" if s.get(k) else ("" if k == "dividend" else s.get(k))) if k == "dividend"
+              else s.get(k) for k in sg_keys] for s in result["live_signals"]]
     if rows2:
         ws2.append_rows(rows2)
     _format_signals(ws2, len(rows2))

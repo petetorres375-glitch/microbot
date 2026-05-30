@@ -48,6 +48,22 @@ class Settings:
         "F,SOFI,PLTR,NIO,AMD,INTC,T,BAC,PFE,CSCO,HOOD,RIVN,SNAP,UBER,WBD,GRAB,VALE,RIG,CCL,KVUE"
     ).split(","))
 
+    # --- Dividend universe: income-focused, lower-beta names. ---
+    # All priced under ~$55 so they're reachable on a $500 account.
+    # VZ, MO, BTI, ET, AGNC, NLY: high-yield income plays.
+    # EPD, KMI: energy infrastructure MLPs with 7-8% yield.
+    # STAG: monthly-paying industrial REIT.
+    # ABBV: dividend-growth pharma (yield ~4%).
+    # CVX: oil major with 4%+ yield and buybacks.
+    # O: Realty Income "monthly dividend company" (~5% yield).
+    dividend_universe: List[str] = field(default_factory=lambda: os.getenv(
+        "DIVIDEND_UNIVERSE",
+        "VZ,MO,BTI,ET,AGNC,NLY,EPD,KMI,STAG,ABBV,CVX,O"
+    ).split(","))
+
+    # Set to false to exclude dividend stocks from the scan.
+    include_dividend_stocks: bool = field(default_factory=lambda: _bool("INCLUDE_DIVIDEND_STOCKS", "true"))
+
     # --- Data / scheduling ---
     bar_timeframe: str = os.getenv("BAR_TIMEFRAME", "1Day")   # "1Day" swing, "15Min" intraday
     lookback_days: int = int(os.getenv("LOOKBACK_DAYS", "400"))
