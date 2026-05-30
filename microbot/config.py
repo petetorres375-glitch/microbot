@@ -64,6 +64,16 @@ class Settings:
     # Set to false to exclude dividend stocks from the scan.
     include_dividend_stocks: bool = field(default_factory=lambda: _bool("INCLUDE_DIVIDEND_STOCKS", "true"))
 
+    # --- Post-split universe: high-momentum names that are now affordable
+    # after large splits. NVDA (10:1), TSLA, AMZN (20:1), GOOG (20:1), SHOP (10:1).
+    split_universe: List[str] = field(default_factory=lambda: os.getenv(
+        "SPLIT_UNIVERSE",
+        "NVDA,TSLA,AMZN,GOOG,SHOP"
+    ).split(","))
+
+    # Set to false to exclude post-split stocks from the scan.
+    include_split_stocks: bool = field(default_factory=lambda: _bool("INCLUDE_SPLIT_STOCKS", "true"))
+
     # --- Data / scheduling ---
     bar_timeframe: str = os.getenv("BAR_TIMEFRAME", "1Day")   # "1Day" swing, "15Min" intraday
     lookback_days: int = int(os.getenv("LOOKBACK_DAYS", "400"))

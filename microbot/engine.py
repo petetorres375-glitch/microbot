@@ -23,6 +23,7 @@ from .config import settings
 from . import journal
 from . import feedback
 from . import notify
+from . import splits
 from .risk import RiskConfig, size_trade
 from .screener import research
 from .strategies import Signal
@@ -59,6 +60,13 @@ def _confirm_live():
 def run_once(research_only: bool = False, push_sheets: bool = False):
     journal.init()
     _confirm_live()
+
+    # Detect any splits that occurred since the last run and rescale journal
+    # entries so stored stops/targets stay consistent with Alpaca's adjusted prices.
+    applied = splits.check_and_apply_splits()
+    if applied:
+        notify.notify(f"microbot: split adjustment applied for "
+                      f"{', '.join(a['symbol'] for a in applied)}")
 
     broker = Broker()
     acct = broker.account()

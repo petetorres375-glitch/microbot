@@ -43,6 +43,11 @@ CREATE TABLE IF NOT EXISTS approvals (
     status TEXT DEFAULT 'pending',   -- pending | submitted | rejected | error
     decided_ts TEXT, alpaca_id TEXT, note TEXT
 );
+CREATE TABLE IF NOT EXISTS split_adjustments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT, split_type TEXT, ratio REAL, ex_date TEXT,
+    applied_ts TEXT
+);
 """
 
 
@@ -153,4 +158,82 @@ def set_approval_status(approval_id: int, status: str,
         con.execute(
             "UPDATE approvals SET status=?, decided_ts=?, alpaca_id=?, note=? WHERE id=?",
             (status, _now(), alpaca_id, note, approval_id),
+        )
+
+
+# ---- split adjustment helpers ----
+
+def all_symbols() -> List[str]:
+    """All unique symbols that appear anywhere in the journal."""
+    with _conn() as con:
+        rows = con.execute(
+            "SELECT DISTINCT symbol FROM orders "
+            "UNION SELECT DISTINCT symbol FROM approvals "
+            "UNION SELECT DISTINCT symbol FROM signals"
+        ).fetchall()
+    return [r["symbol"] for r in rows if r["symbol"]]
+
+
+def split_already_applied(symbol: str, ex_date) -> bool:
+    ex_str = ex_date.isoformat() if hasattr(ex_date, "isoformat") else str(ex_date)
+    with _conn() as con:
+        row = con.execute(
+            "SELECT 1 FROM split_adjustments WHERE symbol=? AND ex_date=?",
+            (symbol, ex_str),
+        ).fetchone()
+    return row is not None
+
+
+def apply_split(symbol: str, ratio: float, ex_date, split_type: str) -> int:
+    """
+    Rescale price and qty in orders, approvals, and signals logged before ex_date.
+
+    Forward split (e.g. 2:1): prices ÷ ratio, qty × ratio.
+    Reverse split (e.g. 1:10): prices × ratio, qty ÷ ratio (floor to 1 min).
+    Returns total rows updated.
+    """
+    ex_str = ex_date.isoformat() if hasattr(ex_date, "isoformat") else str(ex_date)
+    if split_type == "forward":
+        price_mult = 1.0 / ratio
+        qty_mult = ratio
+    else:
+        price_mult = ratio
+        qty_mult = 1.0 / ratio
+
+    total = 0
+    with _conn() as con:
+        cur = con.execute(
+            "UPDATE orders SET "
+            "entry=ROUND(entry*?,4), stop=ROUND(stop*?,4), "
+            "target=ROUND(target*?,4), qty=MAX(1,ROUND(qty*?)) "
+            "WHERE symbol=? AND ts<?",
+            (price_mult, price_mult, price_mult, qty_mult, symbol, ex_str),
+        )
+        total += cur.rowcount
+        cur = con.execute(
+            "UPDATE approvals SET "
+            "entry=ROUND(entry*?,4), stop=ROUND(stop*?,4), "
+            "target=ROUND(target*?,4), qty=MAX(1,ROUND(qty*?)) "
+            "WHERE symbol=? AND ts<?",
+            (price_mult, price_mult, price_mult, qty_mult, symbol, ex_str),
+        )
+        total += cur.rowcount
+        cur = con.execute(
+            "UPDATE signals SET "
+            "entry=ROUND(entry*?,4), stop=ROUND(stop*?,4), "
+            "target=ROUND(target*?,4) "
+            "WHERE symbol=? AND ts<?",
+            (price_mult, price_mult, price_mult, symbol, ex_str),
+        )
+        total += cur.rowcount
+    return total
+
+
+def mark_split_applied(symbol: str, ratio: float, ex_date, split_type: str):
+    ex_str = ex_date.isoformat() if hasattr(ex_date, "isoformat") else str(ex_date)
+    with _conn() as con:
+        con.execute(
+            "INSERT INTO split_adjustments(symbol,split_type,ratio,ex_date,applied_ts)"
+            " VALUES(?,?,?,?,?)",
+            (symbol, split_type, ratio, ex_str, _now()),
         )

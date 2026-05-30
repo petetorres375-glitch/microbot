@@ -83,6 +83,11 @@ def research(universe: List[str] | None = None, rr: float | None = None,
             dividend_set.add(sym)
             if sym not in all_symbols:
                 all_symbols.append(sym)
+    if settings.include_split_stocks:
+        for sym in settings.split_universe:
+            sym = sym.strip().upper()
+            if sym not in all_symbols:
+                all_symbols.append(sym)
 
     # Dividend symbols get the dividend-tuned strategy set; others get the default.
     default_strats = build_default_strategies(rr=rr)
