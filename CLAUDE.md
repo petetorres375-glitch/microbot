@@ -42,6 +42,10 @@ The weekly remote optimizer (`run_optimizer.py`) does walk-forward grid search a
 4. User: `python -m microbot.approvals --params` to approve/reject
 5. Engine picks up approved params on next run
 
+## Order sizing: whole shares only
+
+The bot uses bracket orders (entry + stop + take-profit in one atomic order). Alpaca bracket orders do not support fractional quantities, so sizing is always rounded down to whole shares. **Do not add fractional share support** — it would require splitting each trade into 3 separate orders, losing atomicity and adding orphaned-stop failure modes. Revisit only if moving to a real ~$500 account where 1 share regularly exceeds the risk budget; in that case, prefer trimming the universe to sub-$50 stocks first.
+
 ## Split handling
 
 `splits.py` runs at engine startup, detects recent forward/reverse splits via Alpaca's CorporateActionsClient, and rescales stored stop/target/entry prices in the journal so they stay accurate. Adjustments are idempotent (tracked in `split_adjustments` table).
