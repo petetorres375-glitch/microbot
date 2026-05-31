@@ -31,12 +31,18 @@ The approval gate (`python -m microbot.approvals`) exists precisely because huma
 | `mean_reversion` | RSI + Bollinger dip in uptrend | Liquid swing trades |
 | `breakout` | Donchian + volume confirmation | Breakout momentum |
 | `dividend_momentum` | Slow EMA (50/100), relaxed ADX, RSI < 65 | Low-beta dividend payers |
+| `ema_pullback` | Triple EMA alignment (21>50>150) + pullback on low volume | Stage 2 uptrend setups |
+| `breakout_52w` | 200-day high + 1.5x volume | Institutional-grade breakouts |
 
 ## Self-improvement loop (safe version)
 
 The weekly remote optimizer (`run_optimizer.py`) does walk-forward grid search and proposes better strategy parameters. **Nothing is auto-promoted.** Workflow:
 
 1. Scheduler runs every Monday 9am ET (CCR routine `trig_01PYxALzYVnZuA88Kpror5Qo`)
+
+## Morning signal analysis (daily)
+
+A remote CCR routine (`trig_019TFaNMJyiH1atY2kykNHGD`) runs every weekday at 10:00 AM ET. It reads the universe from the repo, web-searches pre-market movers and recent news for each stock, and delivers a CLEAN / CAUTION / AVOID verdict on each signal before the user opens the approval gate. View results at: https://claude.ai/code/routines/trig_019TFaNMJyiH1atY2kykNHGD
 2. Pushes `optimizer_proposals.json` to repo if improvements found
 3. User: `git pull && python import_proposals.py`
 4. User: `python -m microbot.approvals --params` to approve/reject
