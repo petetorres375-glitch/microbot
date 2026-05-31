@@ -23,18 +23,23 @@ from typing import Dict, List
 from .backtest import backtest_symbol
 from .data import MarketData
 from . import metrics
+from . import ipo_scanner
 from .strategies import build_default_strategies, build_dividend_strategies, build_strategies_from_params
 from .config import settings
 
 
 def _scan_symbols(md: MarketData, symbols: List[str], strategies, rr: float,
-                  min_trades: int, dividend_set: set) -> tuple[List[Dict], List[Dict]]:
+                  min_trades: int, dividend_set: set,
+                  lookback_days: int | None = None,
+                  ipo_set: set | None = None) -> tuple[List[Dict], List[Dict]]:
     rankings: List[Dict] = []
     live_signals: List[Dict] = []
+    ipo_set = ipo_set or set()
     for symbol in symbols:
         symbol = symbol.strip().upper()
         try:
-            df = md.bars(symbol)
+            lb = lookback_days if symbol in ipo_set else None
+            df = md.bars(symbol, lookback_days=lb)
         except Exception as e:
             print(f"  ! {symbol}: data error {e}")
             continue
@@ -78,6 +83,7 @@ def research(universe: List[str] | None = None, rr: float | None = None,
 
     # Build the combined symbol list, deduplicating while preserving order.
     dividend_set: set = set()
+    ipo_set: set = set()
     all_symbols: List[str] = list(universe)
     if settings.include_dividend_stocks:
         for sym in settings.dividend_universe:
@@ -88,6 +94,14 @@ def research(universe: List[str] | None = None, rr: float | None = None,
     if settings.include_split_stocks:
         for sym in settings.split_universe:
             sym = sym.strip().upper()
+            if sym not in all_symbols:
+                all_symbols.append(sym)
+    if settings.include_ipo_stocks:
+        # Merge manually configured tickers with EDGAR auto-discovered ones.
+        manual = [s.strip().upper() for s in settings.ipo_universe if s.strip()]
+        discovered = ipo_scanner.discover_ipos()
+        for sym in dict.fromkeys(manual + discovered):  # dedup, preserve order
+            ipo_set.add(sym)
             if sym not in all_symbols:
                 all_symbols.append(sym)
 
@@ -101,7 +115,8 @@ def research(universe: List[str] | None = None, rr: float | None = None,
     non_div = [s for s in all_symbols if s not in dividend_set]
     div_only = [s for s in all_symbols if s in dividend_set]
 
-    r1, s1 = _scan_symbols(md, non_div, default_strats, rr, min_trades, dividend_set)
+    r1, s1 = _scan_symbols(md, non_div, default_strats, rr, min_trades, dividend_set,
+                           lookback_days=settings.ipo_lookback_days, ipo_set=ipo_set)
     r2, s2 = _scan_symbols(md, div_only, div_strats, rr, min_trades, dividend_set)
 
     rankings = r1 + r2
@@ -110,4 +125,5 @@ def research(universe: List[str] | None = None, rr: float | None = None,
     rankings.sort(key=lambda r: r["score"], reverse=True)
     live_signals.sort(key=lambda r: r["score"], reverse=True)
     return {"rankings": rankings, "live_signals": live_signals,
-            "dividend_universe": list(dividend_set)}
+            "dividend_universe": list(dividend_set),
+            "ipo_universe": list(ipo_set)}

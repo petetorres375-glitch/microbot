@@ -62,6 +62,15 @@ CREATE TABLE IF NOT EXISTS param_proposals (
     status TEXT DEFAULT 'pending',
     decided_ts TEXT, note TEXT
 );
+CREATE TABLE IF NOT EXISTS ipo_discovered (
+    symbol TEXT PRIMARY KEY,
+    discovered_ts TEXT,
+    status TEXT DEFAULT 'active'   -- active | rejected
+);
+CREATE TABLE IF NOT EXISTS scan_log (
+    key TEXT PRIMARY KEY,
+    ts TEXT
+);
 """
 
 
@@ -321,4 +330,52 @@ def reject_param_proposal(proposal_id: int, note: str = ""):
         con.execute(
             "UPDATE param_proposals SET status='rejected', decided_ts=?, note=? WHERE id=?",
             (_now(), note, proposal_id),
+        )
+
+
+# ---- IPO discovery cache ----
+
+def fetch_known_ipos() -> List[str]:
+    with _conn() as con:
+        return [r["symbol"] for r in con.execute(
+            "SELECT symbol FROM ipo_discovered WHERE status='active' ORDER BY discovered_ts"
+        ).fetchall()]
+
+
+def fetch_rejected_ipos() -> List[str]:
+    with _conn() as con:
+        return [r["symbol"] for r in con.execute(
+            "SELECT symbol FROM ipo_discovered WHERE status='rejected'"
+        ).fetchall()]
+
+
+def add_discovered_ipo(symbol: str):
+    with _conn() as con:
+        con.execute(
+            "INSERT OR REPLACE INTO ipo_discovered(symbol, discovered_ts, status)"
+            " VALUES(?, ?, 'active')",
+            (symbol.upper(), _now()),
+        )
+
+
+def reject_discovered_ipo(symbol: str):
+    with _conn() as con:
+        con.execute(
+            "INSERT OR REPLACE INTO ipo_discovered(symbol, discovered_ts, status)"
+            " VALUES(?, ?, 'rejected')",
+            (symbol.upper(), _now()),
+        )
+
+
+def get_scan_log(key: str) -> str | None:
+    with _conn() as con:
+        row = con.execute("SELECT ts FROM scan_log WHERE key=?", (key,)).fetchone()
+    return row["ts"] if row else None
+
+
+def set_scan_log(key: str):
+    with _conn() as con:
+        con.execute(
+            "INSERT OR REPLACE INTO scan_log(key, ts) VALUES(?, ?)",
+            (key, _now()),
         )

@@ -1,10 +1,16 @@
 .venv/
+# All .env variants ignored — only .env.example is tracked
 .env
+.env.*
+!.env.example
 *.db
 *.png
 *.xlsx
 __pycache__/
 service_account.json
+*_service_account.json
+*.key
+*.pem
 *.log
 # optimizer_proposals.json is intentionally tracked (remote agent pushes it)
 

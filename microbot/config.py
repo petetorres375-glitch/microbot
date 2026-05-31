@@ -74,6 +74,19 @@ class Settings:
     # Set to false to exclude post-split stocks from the scan.
     include_split_stocks: bool = field(default_factory=lambda: _bool("INCLUDE_SPLIT_STOCKS", "true"))
 
+    # --- IPO universe: recent IPOs with limited price history.
+    # Scanned with a shorter lookback (ipo_lookback_days) so limited history
+    # doesn't cause data errors. Populate via IPO_UNIVERSE=TICK1,TICK2 in .env.
+    ipo_universe: List[str] = field(default_factory=lambda: [
+        s for s in os.getenv("IPO_UNIVERSE", "").split(",") if s.strip()
+    ])
+
+    # Set to false to exclude IPO stocks from the scan.
+    include_ipo_stocks: bool = field(default_factory=lambda: _bool("INCLUDE_IPO_STOCKS", "true"))
+
+    # Shorter lookback for IPOs — avoids data errors on stocks with < 1 year of history.
+    ipo_lookback_days: int = int(os.getenv("IPO_LOOKBACK_DAYS", "180"))
+
     # --- Data / scheduling ---
     bar_timeframe: str = os.getenv("BAR_TIMEFRAME", "1Day")   # "1Day" swing, "15Min" intraday
     lookback_days: int = int(os.getenv("LOOKBACK_DAYS", "400"))
