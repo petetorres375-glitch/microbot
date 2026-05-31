@@ -1,8 +1,7 @@
 """
 strategies.py
 -------------
-The three systematic strategies. Each is a different *market regime* edge, so
-together they diversify:
+Five systematic strategies, each targeting a different market regime edge:
 
   1. TrendMomentum  - rides established trends (EMA cross + ADX trend filter).
                       The backbone of CTA / managed-futures style trading.
@@ -10,6 +9,12 @@ together they diversify:
                       Classic swing-trading edge on liquid stocks.
   3. Breakout       - buys breakouts of an N-day high (Donchian / Turtle style),
                       with a volume confirmation.
+  4. EMAullback    - triple-EMA alignment (21>50>150) + pullback to 21 EMA on
+                      declining volume. Minervini / IBD Stage 2 style. More
+                      selective than TrendMomentum — requires the full trend stack.
+  5. Breakout52w    - 200-day high breakout with 1.5x volume. Turtle System 2 on
+                      a longer scale. Catches institutional-grade breakouts that
+                      the 20-day Donchian misses.
 
 Every strategy returns a Signal with an entry, a STOP, and a TARGET sized to a
 2:1 reward:risk ratio off ATR. Direction is long-only here (short selling on a
@@ -207,17 +212,109 @@ class DividendMomentum(Strategy):
         return None
 
 
+class EMAPullback(Strategy):
+    """
+    Triple-EMA alignment pullback (Minervini / IBD Stage 2 style).
+
+    Requires EMA21 > EMA50 > EMA150 — the full uptrend stack — then enters when
+    price pulls back to within one ATR of the 21 EMA on declining volume.
+    RSI 38-62 confirms a healthy consolidation (not a breakdown, not a chase).
+
+    Different from TrendMomentum: that strategy enters on any EMA20/50 cross or
+    touch. This one demands all three EMAs aligned and uses volume + RSI to
+    filter out false pullbacks.
+    """
+    name = "ema_pullback"
+
+    def __init__(self, ema1=21, ema2=50, ema3=150, rsi_lo=38, rsi_hi=62, **kw):
+        super().__init__(**kw)
+        self.ema1, self.ema2, self.ema3 = ema1, ema2, ema3
+        self.rsi_lo, self.rsi_hi = rsi_lo, rsi_hi
+
+    def min_bars(self):
+        return self.ema3 + self.atr_period + 5
+
+    def evaluate(self, symbol, df):
+        if len(df) < self.min_bars():
+            return None
+        close = df["close"]
+        e1 = ind.ema(close, self.ema1)
+        e2 = ind.ema(close, self.ema2)
+        e3 = ind.ema(close, self.ema3)
+        rsi_val = ind.rsi(close, 14)
+        a = ind.atr(df, self.atr_period).iloc[-1]
+        avg_vol = df["volume"].rolling(20).mean().iloc[-1]
+
+        aligned = e1.iloc[-1] > e2.iloc[-1] > e3.iloc[-1]
+        near_ema = abs(close.iloc[-1] - e1.iloc[-1]) <= a
+        rsi_ok = self.rsi_lo <= rsi_val.iloc[-1] <= self.rsi_hi
+        low_vol = df["volume"].iloc[-1] < avg_vol  # quiet pullback, not distribution
+
+        if aligned and near_ema and rsi_ok and low_vol:
+            why = (f"EMA{self.ema1}>{self.ema2}>{self.ema3}, "
+                   f"pullback RSI={rsi_val.iloc[-1]:.0f}, low vol")
+            return _bracket(symbol, self.name, close.iloc[-1], a,
+                            self.stop_mult, self.rr, why)
+        return None
+
+
+class Breakout52w(Strategy):
+    """
+    200-day high breakout with volume confirmation (Turtle System 2 scale).
+
+    Catches stocks making major new highs with institutional-level volume — a
+    different quality of breakout than the 20-day Donchian in Breakout. A close
+    above a 200-day high is a meaningful signal: the stock has cleared every
+    seller from the past 10 months. Requires 1.5x volume for conviction.
+
+    Will not fire on IPO stocks or recent listings (needs 200+ bars).
+    """
+    name = "breakout_52w"
+
+    def __init__(self, lookback=200, vol_period=20, vol_mult=1.5, **kw):
+        super().__init__(**kw)
+        self.lookback = lookback
+        self.vol_period, self.vol_mult = vol_period, vol_mult
+
+    def min_bars(self):
+        return self.lookback + self.atr_period + 5
+
+    def evaluate(self, symbol, df):
+        if len(df) < self.min_bars():
+            return None
+        close = df["close"]
+        prior_high = df["high"].iloc[-(self.lookback + 1):-1].max()
+        a = ind.atr(df, self.atr_period).iloc[-1]
+        avg_vol = df["volume"].rolling(self.vol_period).mean().iloc[-1]
+        vol_ok = df["volume"].iloc[-1] >= self.vol_mult * avg_vol
+
+        if close.iloc[-1] > prior_high and vol_ok:
+            why = (f"New {self.lookback}d-high on "
+                   f"{df['volume'].iloc[-1] / avg_vol:.1f}x vol")
+            return _bracket(symbol, self.name, close.iloc[-1], a,
+                            self.stop_mult, self.rr, why)
+        return None
+
+
 # Registry so config / dashboard can reference strategies by name.
 ALL_STRATEGIES = {
     TrendMomentum.name: TrendMomentum,
     MeanReversion.name: MeanReversion,
     Breakout.name: Breakout,
     DividendMomentum.name: DividendMomentum,
+    EMAPullback.name: EMAPullback,
+    Breakout52w.name: Breakout52w,
 }
 
 
 def build_default_strategies(rr: float = 2.0):
-    return [TrendMomentum(rr=rr), MeanReversion(rr=rr), Breakout(rr=rr)]
+    return [
+        TrendMomentum(rr=rr),
+        MeanReversion(rr=rr),
+        Breakout(rr=rr),
+        EMAPullback(rr=rr),
+        Breakout52w(rr=rr),
+    ]
 
 
 def build_dividend_strategies(rr: float = 2.0):
@@ -237,4 +334,10 @@ def build_strategies_from_params(active: dict, rr: float = 2.0,
 
     if dividend:
         return [_make(DividendMomentum), _make(TrendMomentum), _make(MeanReversion)]
-    return [_make(TrendMomentum), _make(MeanReversion), _make(Breakout)]
+    return [
+        _make(TrendMomentum),
+        _make(MeanReversion),
+        _make(Breakout),
+        _make(EMAPullback),
+        _make(Breakout52w),
+    ]
