@@ -43,7 +43,7 @@ def fetch_recent_splits(symbols: List[str],
     start = end - timedelta(days=lookback_days)
     req = CorporateActionsRequest(
         symbols=symbols,
-        types=["forward_splits", "reverse_splits"],
+        types=["forward_split", "reverse_split"],
         start=start,
         end=end,
     )
