@@ -79,7 +79,7 @@ _WL_GUIDE = [
     ("Expectancy R",  "Average profit per trade in units of risk (1.0R = gained 1× your risk on average)"),
     ("Profit Factor", "Gross profit ÷ gross loss — above 1.5 is healthy"),
     ("Max DD (R)",    "Worst historical drawdown in R-multiples (losing streak depth)"),
-    ("Score",         "Composite rank score — higher is better; 0 means insufficient history to rank"),
+    ("Score",         "Drawdown-adjusted rank score: expectancy × √trades × DD penalty. Higher is better; 0 means insufficient history. Deep drawdown names are dampened even if expectancy looks good."),
     ("Dividend",      "YES = dividend-focused strategy (slow EMA, relaxed ADX, high yield focus)"),
 ] + _STRATEGY_GUIDE
 
@@ -89,7 +89,7 @@ _SG_GUIDE = [
     ("Entry",    "Suggested entry price for the bracket order"),
     ("Stop",     "Stop-loss price — order exits automatically if price falls here"),
     ("Target",   "Take-profit price — order exits automatically if price reaches here"),
-    ("Score",    "Historical rank score for this symbol/strategy combo"),
+    ("Score",    "Drawdown-adjusted rank score — deep historical drawdowns are penalized even with high expectancy"),
     ("Dividend", "YES = dividend-focused strategy"),
     ("Reason",   "Technical conditions that triggered the signal (EMA, ADX, RSI values)"),
 ] + _STRATEGY_GUIDE

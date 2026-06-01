@@ -11,9 +11,12 @@ every symbol in the universe and every strategy:
      that show up across many trades, not one lucky streak.
   4. Rank candidates and surface any that have a LIVE signal right now.
 
-Score = expectancy_in_R * sqrt(num_trades), with a profit-factor gate. The
-sqrt(trades) term rewards strategies that worked repeatedly; the gate rejects
-anything with profit factor < 1.0 (i.e. it lost money in the test).
+Score = expectancy_in_R * sqrt(num_trades) * drawdown_penalty, with a
+profit-factor gate. The sqrt(trades) term rewards strategies that worked
+repeatedly; the gate rejects anything with profit factor < 1.0 (i.e. it lost
+money in the test). The drawdown penalty dampens scores for strategies whose
+historical worst-drawdown was deep (dd_tolerance=8R ≈ 8% of a $500 account
+at 1% risk — the "this is starting to hurt" threshold).
 """
 from __future__ import annotations
 
@@ -26,6 +29,15 @@ from . import metrics
 from . import ipo_scanner
 from .strategies import build_default_strategies, build_dividend_strategies, build_strategies_from_params
 from .config import settings
+
+
+def _robust_score(expectancy_r: float, trades: int, max_dd_r: float,
+                  min_trades: int = 8, dd_tolerance: float = 8.0) -> float:
+    if trades < min_trades:
+        return 0.0
+    robustness = expectancy_r * math.sqrt(trades)
+    dd_penalty = 1.0 / (1.0 + abs(max_dd_r) / dd_tolerance)
+    return round(robustness * dd_penalty, 3)
 
 
 def _scan_symbols(md: MarketData, symbols: List[str], strategies, rr: float,
@@ -52,7 +64,8 @@ def _scan_symbols(md: MarketData, symbols: List[str], strategies, rr: float,
             m = metrics.compute(trades)
             score = 0.0
             if m["trades"] >= min_trades and (m["profit_factor"] or 0) >= 1.0:
-                score = round(m["expectancy_r"] * math.sqrt(m["trades"]), 3)
+                score = _robust_score(m["expectancy_r"], m["trades"],
+                                      m["max_drawdown"], min_trades)
             rankings.append({
                 "symbol": symbol, "strategy": strat.name,
                 "trades": m["trades"], "win_rate": m["win_rate"],

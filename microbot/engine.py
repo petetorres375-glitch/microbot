@@ -128,6 +128,13 @@ def run_once(research_only: bool = False, push_sheets: bool = False):
             print(f"  vetoed by analyzer: {s['strategy']}/{s['symbol']}")
             continue
 
+        risk_per_share = s["entry"] - s["stop"]
+        risk_budget = equity * cfg.risk_per_trade_pct
+        if risk_per_share > risk_budget:
+            print(f"  skip {s['symbol']}: 1 share risks ${risk_per_share:.2f}"
+                  f" > ${risk_budget:.2f} budget (stock too expensive to size)")
+            continue
+
         sig = Signal(s["symbol"], s["strategy"], "buy", s["entry"], s["stop"],
                      s["target"], 0.0, s["reason"], settings.reward_risk_ratio)
         journal.log_signal(sig, taken=False)

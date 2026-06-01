@@ -12,8 +12,10 @@ Deliberate simplifications (so you trust the numbers and know their limits):
   * Fills assumed at the signal bar's close; stop/target checked on later bars'
     high/low. If a single bar spans both, we assume the STOP fills first
     (conservative / pessimistic — real life is messy).
-  * No slippage/commission model by default (Alpaca is commission-free, but add
-    a slippage cents value to be realistic).
+  * Overnight gaps modeled: if a bar opens below the stop, the fill is at the
+    open price (not at the stop), correctly reflecting gap-through slippage.
+  * No commission model (Alpaca is commission-free), but slippage cents can be
+    passed in.
 This is good enough to RANK strategies and reject bad ones. It is NOT a promise
 of live results.
 """
@@ -46,15 +48,20 @@ def backtest_symbol(strategy: Strategy, symbol: str, df: pd.DataFrame,
         # Walk forward to resolve the trade.
         exit_price, exit_idx, outcome = None, None, None
         for j in range(i + 1, n):
+            o = df["open"].iloc[j]
             hi, lo = df["high"].iloc[j], df["low"].iloc[j]
-            hit_stop = lo <= sig.stop
-            hit_target = hi >= sig.target
-            if hit_stop and hit_target:        # ambiguous bar -> assume stop
-                exit_price, outcome = sig.stop, "stop"
-            elif hit_stop:
-                exit_price, outcome = sig.stop, "stop"
-            elif hit_target:
-                exit_price, outcome = sig.target, "target"
+            if o <= sig.stop:
+                # Overnight gap blows through stop — fill at open, not stop price.
+                exit_price, outcome = o, "stop"
+            else:
+                hit_stop = lo <= sig.stop
+                hit_target = hi >= sig.target
+                if hit_stop and hit_target:    # ambiguous bar -> assume stop
+                    exit_price, outcome = sig.stop, "stop"
+                elif hit_stop:
+                    exit_price, outcome = sig.stop, "stop"
+                elif hit_target:
+                    exit_price, outcome = sig.target, "target"
             if outcome:
                 exit_idx = j
                 break
