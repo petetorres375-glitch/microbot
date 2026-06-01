@@ -34,19 +34,34 @@ The approval gate (`python -m microbot.approvals`) exists precisely because huma
 | `ema_pullback` | Triple EMA alignment (21>50>150) + pullback on low volume | Stage 2 uptrend setups |
 | `breakout_52w` | 200-day high + 1.5x volume | Institutional-grade breakouts |
 
+## Scheduled CCR routines
+
+| Routine | ID | Schedule | Purpose |
+|---|---|---|---|
+| Morning signal analysis | `trig_019TFaNMJyiH1atY2kykNHGD` | Weekdays 10:00 AM ET | Web-searches news on universe, delivers CLEAN/CAUTION/AVOID verdicts |
+| Daily research scan | `trig_019qsZJECstukLDhqDFXcv6R` | Weekdays 9:35 AM ET | Runs `run_research.py`, pushes ranked candidates + live signals to Google Sheets |
+| Weekly optimizer | `trig_01PYxALzYVnZuA88Kpror5Qo` | Mondays 9:00 AM ET | Walk-forward grid search, pushes `optimizer_proposals.json` to repo if improvements found |
+
+View routine results at: https://claude.ai/code/routines
+
 ## Self-improvement loop (safe version)
 
-The weekly remote optimizer (`run_optimizer.py`) does walk-forward grid search and proposes better strategy parameters. **Nothing is auto-promoted.** Workflow:
+The weekly remote optimizer does walk-forward grid search and proposes better strategy parameters. **Nothing is auto-promoted.** Workflow:
 
-1. Scheduler runs every Monday 9am ET (CCR routine `trig_01PYxALzYVnZuA88Kpror5Qo`)
-
-## Morning signal analysis (daily)
-
-A remote CCR routine (`trig_019TFaNMJyiH1atY2kykNHGD`) runs every weekday at 10:00 AM ET. It reads the universe from the repo, web-searches pre-market movers and recent news for each stock, and delivers a CLEAN / CAUTION / AVOID verdict on each signal before the user opens the approval gate. View results at: https://claude.ai/code/routines/trig_019TFaNMJyiH1atY2kykNHGD
+1. Optimizer runs every Monday 9am ET (CCR routine above)
 2. Pushes `optimizer_proposals.json` to repo if improvements found
 3. User: `git pull && python import_proposals.py`
 4. User: `python -m microbot.approvals --params` to approve/reject
 5. Engine picks up approved params on next run
+
+## Google Sheets dashboard
+
+`run_research.py` pushes two tabs to the sheet at `GSHEET_ID`:
+
+- **Watchlist** — one row per symbol (best strategy), filtered to score > 0 or trades ≥ 3 with positive expectancy, sorted A→Z. Navy timestamp banner + column guide with strategy descriptions.
+- **LiveSignals** — signals that fired today (entry, stop, target, reason). Populates when a new signal fires on an unowned symbol.
+
+The daily scan routine refreshes the sheet automatically at 9:35 AM ET every trading day.
 
 ## Order sizing: whole shares only
 
@@ -98,7 +113,7 @@ python run_optimizer.py
 ALPACA_API_KEY=...
 ALPACA_API_SECRET=...
 LIVE_TRADING=false
-STARTING_EQUITY=500
+STARTING_EQUITY=5000
 INCLUDE_DIVIDEND_STOCKS=true
 INCLUDE_SPLIT_STOCKS=true
 GSHEET_ID=...
