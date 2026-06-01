@@ -60,6 +60,93 @@ def _client():
     return gspread.service_account(filename=settings.gsheet_creds)
 
 
+_STRATEGY_GUIDE = [
+    ("", ""),
+    ("Strategies", ""),
+    ("trend_momentum",    "EMA crossover + ADX filter — rides stocks in a confirmed uptrend"),
+    ("mean_reversion",    "RSI + Bollinger Band dip within an uptrend — buys the pullback"),
+    ("breakout",          "Donchian channel break + volume confirmation — catches momentum breakouts"),
+    ("ema_pullback",      "Triple EMA alignment (21>50>150) + low-volume pullback — Stage 2 uptrend entries"),
+    ("breakout_52w",      "Near 200-day high + 1.5× volume — institutional-grade breakout signal"),
+    ("dividend_momentum", "Slow EMA (50/100), relaxed ADX, RSI < 65 — income-focused swing entries"),
+]
+
+_WL_GUIDE = [
+    ("Symbol",        "Stock ticker symbol"),
+    ("Strategy",      "Trading strategy that generated the signal (see Strategies section below)"),
+    ("Trades",        "Number of historical backtested trades"),
+    ("Win Rate",      "Percentage of trades that were profitable (0.6 = 60%)"),
+    ("Expectancy R",  "Average profit per trade in units of risk (1.0R = gained 1× your risk on average)"),
+    ("Profit Factor", "Gross profit ÷ gross loss — above 1.5 is healthy"),
+    ("Max DD (R)",    "Worst historical drawdown in R-multiples (losing streak depth)"),
+    ("Score",         "Composite rank score — higher is better; 0 means insufficient history to rank"),
+    ("Dividend",      "YES = dividend-focused strategy (slow EMA, relaxed ADX, high yield focus)"),
+] + _STRATEGY_GUIDE
+
+_SG_GUIDE = [
+    ("Symbol",   "Stock ticker symbol"),
+    ("Strategy", "Strategy that triggered today's signal (see Strategies section below)"),
+    ("Entry",    "Suggested entry price for the bracket order"),
+    ("Stop",     "Stop-loss price — order exits automatically if price falls here"),
+    ("Target",   "Take-profit price — order exits automatically if price reaches here"),
+    ("Score",    "Historical rank score for this symbol/strategy combo"),
+    ("Dividend", "YES = dividend-focused strategy"),
+    ("Reason",   "Technical conditions that triggered the signal (EMA, ADX, RSI values)"),
+] + _STRATEGY_GUIDE
+
+_GUIDE_HEADER_BG = {"red": 0.25, "green": 0.25, "blue": 0.25}
+_GUIDE_HEADER_FG = {"red": 1.0,  "green": 1.0,  "blue": 1.0}
+_GUIDE_LABEL_BG  = {"red": 0.93, "green": 0.93, "blue": 0.93}
+_GUIDE_LABEL_FG  = {"red": 0.15, "green": 0.15, "blue": 0.15}
+
+
+_STAMP_BG = {"red": 0.18, "green": 0.38, "blue": 0.62}  # navy blue
+_STAMP_FG = {"red": 1.0,  "green": 1.0,  "blue": 1.0}
+
+
+def _write_timestamp(ws, col_count: int):
+    """Format the timestamp banner at row 1 (content already written by _ensure_ws)."""
+    end_col = _col_letter(col_count)
+    ws.merge_cells(f"A1:{end_col}1")
+    ws.format(f"A1:{end_col}1", {
+        "backgroundColor": _STAMP_BG,
+        "textFormat": {"bold": True, "fontSize": 13, "foregroundColor": _STAMP_FG},
+        "horizontalAlignment": "CENTER", "verticalAlignment": "MIDDLE",
+    })
+
+
+def _add_guide(ws, data_rows: int, guide: list, col_count: int):
+    """Write a column-guide legend below the data table (batched to stay under API quota)."""
+    start = data_rows + 4  # +1 timestamp row, +1 header row, +1 gap, +1
+    end_col = _col_letter(col_count)
+    n = len(guide)
+
+    # Write all values in one call
+    values = [["Column Guide"] + [""] * (col_count - 1)]
+    values += [[label, desc] + [""] * (col_count - 2) for label, desc in guide]
+    ws.update(values=values, range_name=f"A{start}")
+
+    # Merge header row
+    ws.merge_cells(f"A{start}:{end_col}{start}")
+
+    # Format header, labels, and descriptions — 3 calls total
+    ws.format(f"A{start}:{end_col}{start}", {
+        "backgroundColor": _GUIDE_HEADER_BG,
+        "textFormat": {"bold": True, "fontSize": 14, "foregroundColor": _GUIDE_HEADER_FG},
+        "horizontalAlignment": "CENTER", "verticalAlignment": "MIDDLE",
+    })
+    ws.format(f"A{start + 1}:A{start + n}", {
+        "backgroundColor": _GUIDE_LABEL_BG,
+        "textFormat": {"bold": True, "fontSize": 14, "foregroundColor": _GUIDE_LABEL_FG},
+        "horizontalAlignment": "LEFT", "verticalAlignment": "MIDDLE",
+    })
+    ws.format(f"B{start + 1}:{end_col}{start + n}", {
+        "backgroundColor": _GUIDE_LABEL_BG,
+        "textFormat": {"fontSize": 14, "foregroundColor": _GUIDE_LABEL_FG},
+        "horizontalAlignment": "LEFT", "verticalAlignment": "MIDDLE",
+    })
+
+
 def _col_letter(n: int) -> str:
     """Convert 1-based column index to letter (1→A, 2→B …)."""
     return chr(ord("A") + n - 1)
@@ -96,10 +183,10 @@ def _row_height(ws, start_row: int, end_row: int, height: int = 28):
 
 
 def _format_header_cells(ws, col_colors: List[dict], col_count: int):
-    """Format each header cell with its own color, bold dark text, size 12, border."""
+    """Format each header cell (row 2) with its own color, bold dark text, size 12, border."""
     for i, bg in enumerate(col_colors[:col_count]):
         col = _col_letter(i + 1)
-        ws.format(f"{col}1", {
+        ws.format(f"{col}2", {
             "backgroundColor": bg,
             "textFormat": {
                 "bold": True,
@@ -116,46 +203,72 @@ def _format_header_cells(ws, col_colors: List[dict], col_count: int):
 
 
 def _format_data_rows(ws, row_count: int, col_count: int):
-    """Format data rows: font size 12, alternating bg, borders."""
+    """Format data rows: font size 12, alternating bg, borders — batched into 2 API calls."""
+    if row_count == 0:
+        return
     end_col = _col_letter(col_count)
-    for i in range(2, row_count + 2):
-        bg = _ROW_ALT if i % 2 == 0 else _WHITE
-        ws.format(f"A{i}:{end_col}{i}", {
-            "backgroundColor": bg,
-            "textFormat": {"fontSize": 12, "foregroundColor": _DARK_TEXT},
-            "horizontalAlignment": "CENTER",
-            "verticalAlignment": "MIDDLE",
-            "borders": {
-                "top":    _BORDER, "bottom": _BORDER,
-                "left":   _BORDER, "right":  _BORDER,
-            },
-        })
+    base_style = {
+        "textFormat": {"fontSize": 12, "foregroundColor": _DARK_TEXT},
+        "horizontalAlignment": "CENTER",
+        "verticalAlignment": "MIDDLE",
+        "borders": {"top": _BORDER, "bottom": _BORDER, "left": _BORDER, "right": _BORDER},
+    }
+    even_rows = [f"A{i}:{end_col}{i}" for i in range(3, row_count + 3) if i % 2 == 0]
+    odd_rows  = [f"A{i}:{end_col}{i}" for i in range(3, row_count + 3) if i % 2 != 0]
+    if even_rows:
+        ws.format(even_rows, {**base_style, "backgroundColor": _ROW_ALT})
+    if odd_rows:
+        ws.format(odd_rows,  {**base_style, "backgroundColor": _WHITE})
 
 
 def _ensure_ws(sh, title: str, headers: List[str]):
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).astimezone()
+    stamp = now.strftime("%B %d, %Y  %I:%M %p")
     try:
         ws = sh.worksheet(title)
     except Exception:
         ws = sh.add_worksheet(title=title, rows=200, cols=max(10, len(headers)))
     ws.clear()
-    ws.append_row(headers)
+    # Unmerge all cells so stale guide merges don't block data rows on the next write
+    try:
+        sh.batch_update({"requests": [{"unmergeCells": {
+            "range": {"sheetId": ws.id, "startRowIndex": 0, "endRowIndex": 200,
+                      "startColumnIndex": 0, "endColumnIndex": 26}
+        }}]})
+    except Exception:
+        pass
+    ws.update(values=[[f"microbot  |  Last Updated: {stamp}"] + [""] * (len(headers) - 1)], range_name="A1")
+    ws.update(values=[headers], range_name="A2")
     return ws
 
 
 def _format_watchlist(ws, row_count: int):
-    ws.freeze(rows=1)
+    ws.freeze(rows=2)
+    _write_timestamp(ws, 9)
     _format_header_cells(ws, _COL_COLORS_WL, 9)
     _format_data_rows(ws, row_count, 9)
-    _col_widths(ws, [100, 160, 80, 100, 120, 120, 110, 90, 80])
-    _row_height(ws, 1, row_count + 1, 32)
+    _col_widths(ws, [218, 160, 80, 100, 120, 120, 110, 90, 80])
+    _row_height(ws, 1, row_count + 2, 32)
+    _add_guide(ws, row_count, _WL_GUIDE, 9)
 
 
 def _format_signals(ws, row_count: int):
-    ws.freeze(rows=1)
+    ws.freeze(rows=2)
+    _write_timestamp(ws, 8)
     _format_header_cells(ws, _COL_COLORS_SG, 8)
     _format_data_rows(ws, row_count, 8)
-    _col_widths(ws, [100, 160, 90, 90, 90, 90, 80, 320])
-    _row_height(ws, 1, max(row_count + 1, 2), 32)
+    _col_widths(ws, [218, 160, 90, 90, 90, 90, 80, 320])
+    _row_height(ws, 1, max(row_count + 2, 3), 32)
+    _add_guide(ws, row_count, _SG_GUIDE, 8)
+
+
+def _native(v):
+    """Convert numpy scalars to plain Python types so gspread can serialize them."""
+    try:
+        return v.item()
+    except AttributeError:
+        return v
 
 
 def push_research(result: Dict) -> bool:
@@ -174,20 +287,36 @@ def push_research(result: Dict) -> bool:
     ws = _ensure_ws(sh, "Watchlist", rk_headers)
     rk_keys = ["symbol", "strategy", "trades", "win_rate",
                "expectancy_r", "profit_factor", "max_dd_R", "score", "dividend"]
-    rows = [[("YES" if r.get(k) else ("" if k == "dividend" else r.get(k))) if k == "dividend"
-             else r.get(k) for k in rk_keys] for r in result["rankings"][:50]]
+    best: dict = {}
+    for r in result["rankings"]:
+        sym = r.get("symbol")
+        score = r.get("score") or 0
+        exp = r.get("expectancy_r") or 0
+        trades = r.get("trades") or 0
+        if score <= 0 and not (trades >= 3 and exp > 0):
+            continue
+        prev = best.get(sym)
+        if prev is None:
+            best[sym] = r
+        else:
+            prev_score = prev.get("score") or 0
+            if score > prev_score or (score == prev_score and exp > (prev.get("expectancy_r") or 0)):
+                best[sym] = r
+    rows = [[("YES" if r.get(k) else ("" if k == "dividend" else _native(r.get(k)))) if k == "dividend"
+             else _native(r.get(k)) for k in rk_keys]
+            for r in sorted(best.values(), key=lambda r: r.get("symbol", ""))]
     if rows:
-        ws.append_rows(rows)
+        ws.update(values=rows, range_name="A3")
     _format_watchlist(ws, len(rows))
 
     # Live signals tab
     sg_headers = ["Symbol", "Strategy", "Entry", "Stop", "Target", "Score", "Dividend", "Reason"]
     ws2 = _ensure_ws(sh, "LiveSignals", sg_headers)
     sg_keys = ["symbol", "strategy", "entry", "stop", "target", "score", "dividend", "reason"]
-    rows2 = [[("YES" if s.get(k) else ("" if k == "dividend" else s.get(k))) if k == "dividend"
-              else s.get(k) for k in sg_keys] for s in result["live_signals"]]
+    rows2 = [[("YES" if s.get(k) else ("" if k == "dividend" else _native(s.get(k)))) if k == "dividend"
+              else _native(s.get(k)) for k in sg_keys] for s in result["live_signals"]]
     if rows2:
-        ws2.append_rows(rows2)
+        ws2.update(values=rows2, range_name="A3")
     _format_signals(ws2, len(rows2))
 
     print(f"  (gsheets) pushed {len(rows)} rankings, {len(rows2)} live signals.")
