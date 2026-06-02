@@ -107,7 +107,10 @@ def run_once(research_only: bool = False, push_sheets: bool = False):
     held = broker.held_symbols()
     open_positions = len(held)
     open_risk = 0.0  # (simplified; real open risk would sum live stops)
-    equity, bp = acct["equity"], acct["buying_power"]
+    # In paper mode use STARTING_EQUITY so sizing reflects the real account
+    # size we're simulating, not Alpaca's default $100k paper balance.
+    equity = settings.starting_equity if broker.paper else acct["equity"]
+    bp = min(acct["buying_power"], equity)
 
     # Adaptive feedback from YOUR analyzer over the bot's closed trades.
     vetoes = feedback.compute_vetoes()

@@ -137,7 +137,9 @@ def queue_manual(symbol: str, strategy_name: str) -> dict:
         risk_per_trade_pct=settings.risk_per_trade_pct,
         max_open_positions=settings.max_open_positions,
     )
-    sized = size_trade(sig, acct["equity"], acct["buying_power"], cfg, 0.0, 0)
+    equity = settings.starting_equity if broker.paper else acct["equity"]
+    bp = min(acct["buying_power"], equity)
+    sized = size_trade(sig, equity, bp, cfg, 0.0, 0)
     if sized is None:
         return {"ok": False, "msg": f"fails risk/sizing gate for {symbol} "
                 f"(1 share may exceed 1% risk budget)"}
