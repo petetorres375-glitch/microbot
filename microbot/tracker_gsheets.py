@@ -44,6 +44,18 @@ _COL_COLORS_SG = [
     {"red": 0.90, "green": 0.88, "blue": 0.98},  # Reason      — light lavender
 ]
 
+_COL_COLORS_POS = [
+    {"red": 0.68, "green": 0.85, "blue": 0.90},  # Symbol      — light blue
+    {"red": 0.98, "green": 0.88, "blue": 0.68},  # Shares      — light orange
+    {"red": 0.98, "green": 0.96, "blue": 0.68},  # Entry       — light yellow
+    {"red": 0.75, "green": 0.92, "blue": 0.75},  # Current     — light green
+    {"red": 0.68, "green": 0.90, "blue": 0.85},  # P&L $       — light teal
+    {"red": 0.85, "green": 0.75, "blue": 0.92},  # P&L %       — light purple
+    {"red": 0.95, "green": 0.75, "blue": 0.75},  # Stop        — light red
+    {"red": 0.68, "green": 0.90, "blue": 0.80},  # Target      — light mint
+    {"red": 0.98, "green": 0.96, "blue": 0.68},  # Health      — light yellow
+]
+
 _WHITE     = {"red": 1.0, "green": 1.0,  "blue": 1.0}
 _DARK_TEXT = {"red": 0.15, "green": 0.15, "blue": 0.15}
 _ROW_ALT   = {"red": 0.96, "green": 0.96, "blue": 0.98}  # subtle alternating row
@@ -93,6 +105,19 @@ _SG_GUIDE = [
     ("Dividend", "YES = dividend-focused strategy"),
     ("Reason",   "Technical conditions that triggered the signal (EMA, ADX, RSI values)"),
 ] + _STRATEGY_GUIDE
+
+_POS_GUIDE = [
+    ("Symbol",   "Stock ticker symbol"),
+    ("Shares",   "Number of shares currently held"),
+    ("Entry",    "Average price paid per share"),
+    ("Current",  "Latest market price"),
+    ("P&L $",    "Unrealized dollar gain/loss on the position"),
+    ("P&L %",    "Unrealized percentage gain/loss from entry"),
+    ("Stop",     "Stop-loss price from the bracket order — position exits automatically here"),
+    ("Target",   "Take-profit price from the bracket order — position exits automatically here"),
+    ("Health",   "Trade quality: R-multiple showing how far price has moved toward target vs stop. "
+                 "+1.0R = at target, -1.0R = at stop. STRONG (>+1R) / WINNING / BREAKEVEN / AT RISK"),
+]
 
 _GUIDE_HEADER_BG = {"red": 0.25, "green": 0.25, "blue": 0.25}
 _GUIDE_HEADER_FG = {"red": 1.0,  "green": 1.0,  "blue": 1.0}
@@ -263,6 +288,16 @@ def _format_signals(ws, row_count: int):
     _add_guide(ws, row_count, _SG_GUIDE, 8)
 
 
+def _format_positions(ws, row_count: int):
+    ws.freeze(rows=2)
+    _write_timestamp(ws, 9)
+    _format_header_cells(ws, _COL_COLORS_POS, 9)
+    _format_data_rows(ws, row_count, 9)
+    _col_widths(ws, [218, 80, 100, 100, 100, 100, 100, 100, 120])
+    _row_height(ws, 1, max(row_count + 2, 3), 32)
+    _add_guide(ws, row_count, _POS_GUIDE, 9)
+
+
 def _native(v):
     """Convert numpy scalars to plain Python types so gspread can serialize them."""
     try:
@@ -321,3 +356,86 @@ def push_research(result: Dict) -> bool:
 
     print(f"  (gsheets) pushed {len(rows)} rankings, {len(rows2)} live signals.")
     return True
+
+
+def push_positions() -> bool:
+    """Write current Alpaca positions (with stops/targets/health) to a Positions tab."""
+    if not settings.gsheet_id:
+        return False
+    try:
+        from alpaca.trading.client import TradingClient
+        from alpaca.trading.requests import GetOrdersRequest
+        from alpaca.trading.enums import QueryOrderStatus
+
+        tc = TradingClient(settings.api_key, settings.api_secret, paper=not settings.live_trading)
+        positions = tc.get_all_positions()
+        open_orders = tc.get_orders(GetOrdersRequest(status=QueryOrderStatus.OPEN))
+
+        # Build stop/target lookup. After entry fills, bracket legs become standalone
+        # orders — check both leg lists and top-level order type.
+        stops: dict = {}
+        targets: dict = {}
+        for o in open_orders:
+            sym = o.symbol
+            otype = str(o.type).lower()
+            if o.legs:
+                for leg in o.legs:
+                    ltype = str(leg.type).lower()
+                    if "stop" in ltype and leg.stop_price:
+                        stops[sym] = float(leg.stop_price)
+                    elif "limit" in ltype and "stop" not in ltype and leg.limit_price:
+                        targets[sym] = float(leg.limit_price)
+            else:
+                if "stop" in otype and o.stop_price:
+                    stops[sym] = float(o.stop_price)
+                elif otype == "limit" and o.limit_price:
+                    targets[sym] = float(o.limit_price)
+
+        sh = _client().open_by_key(settings.gsheet_id)
+        pos_headers = ["Symbol", "Shares", "Entry", "Current", "P&L $", "P&L %", "Stop", "Target", "Health"]
+        ws = _ensure_ws(sh, "Positions", pos_headers)
+
+        rows = []
+        for p in sorted(positions, key=lambda x: x.symbol):
+            sym = p.symbol
+            entry = float(p.avg_entry_price)
+            current = float(p.current_price)
+            pnl_dollars = float(p.unrealized_pl)
+            pnl_pct = round(float(p.unrealized_plpc) * 100, 2)
+            stop = stops.get(sym)
+            target = targets.get(sym)
+
+            # Trade health: R-multiple from entry toward stop/target
+            if stop and stop != entry:
+                r = round((current - entry) / (entry - stop), 2)
+                if r >= 1.5:
+                    health = f"+{r}R STRONG"
+                elif r > 0:
+                    health = f"+{r}R Winning"
+                elif r == 0:
+                    health = "Breakeven"
+                else:
+                    health = f"{r}R At Risk"
+            else:
+                health = "Winning" if pnl_pct > 0 else ("Breakeven" if pnl_pct == 0 else "At Risk")
+
+            rows.append([
+                sym,
+                int(float(p.qty)),
+                round(entry, 2),
+                round(current, 2),
+                round(pnl_dollars, 2),
+                f"{'+' if pnl_pct >= 0 else ''}{pnl_pct}%",
+                round(stop, 2) if stop is not None else "",
+                round(target, 2) if target is not None else "",
+                health,
+            ])
+
+        if rows:
+            ws.update(values=rows, range_name="A3")
+        _format_positions(ws, len(rows))
+        print(f"  (gsheets) pushed {len(rows)} positions.")
+        return True
+    except Exception as e:
+        print(f"  (gsheets) positions skipped: {e}")
+        return False

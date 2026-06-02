@@ -56,10 +56,11 @@ The weekly remote optimizer does walk-forward grid search and proposes better st
 
 ## Google Sheets dashboard
 
-`run_research.py` pushes two tabs to the sheet at `GSHEET_ID`:
+`run_research.py` pushes three tabs to the sheet at `GSHEET_ID`:
 
 - **Watchlist** — one row per symbol (best strategy), filtered to score > 0 or trades ≥ 3 with positive expectancy, sorted A→Z. Navy timestamp banner + column guide with strategy descriptions.
 - **LiveSignals** — signals that fired today (entry, stop, target, reason). Populates when a new signal fires on an unowned symbol.
+- **Positions** — current open positions pulled live from Alpaca: symbol, shares, entry, current price, P&L $, P&L %, stop, target, and a **Health** column. Health shows the R-multiple (`(current - entry) / (entry - stop)`) with labels: `+1.2R STRONG` / `+0.3R Winning` / `Breakeven` / `-0.2R At Risk`. Stop/target only populate during market hours when bracket legs are active.
 
 The daily scan routine refreshes the sheet automatically at 9:35 AM ET every trading day.
 

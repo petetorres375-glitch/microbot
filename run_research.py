@@ -2,8 +2,10 @@
 """Convenience: scan + rank the universe, no trading. `python run_research.py`"""
 from microbot.engine import run_once
 from microbot.yahoo_scanner import fetch_candidates
+from microbot.tracker_gsheets import push_positions
 
 run_once(research_only=True, push_sheets=True)
+push_positions()
 
 print("\n--- Yahoo Finance: new candidates outside universe ---")
 candidates = fetch_candidates(top=10)
