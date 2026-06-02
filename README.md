@@ -19,7 +19,7 @@ you a dashboard to watch it all.
 - Scores and ranks every setup (drawdown-adjusted — deep losers penalized)
 - Pushes a ranked **Watchlist** and **Live Signals** tab to Google Sheets at 9:35 AM ET
 - Nothing trades without your approval (`python -m microbot.approvals`)
-- Places bracket orders on **Alpaca paper account** — entry + stop + take-profit in one atomic shot
+- Places **atomic bracket orders** on **Alpaca paper account** — entry + stop + take-profit in one shot
 - Reconciles filled brackets from Alpaca into the journal every morning (real P&L, R-multiples)
 - Kill switch: `python -c "from microbot.broker import Broker; Broker().close_all()"` — cancels all Alpaca orders and closes every position instantly
 - Weekly optimizer proposes better parameters every Monday, you approve before anything changes
