@@ -24,6 +24,7 @@ from . import journal
 from . import feedback
 from . import notify
 from . import splits
+from . import verdicts as verdicts_mod
 from .risk import RiskConfig, size_trade
 from .screener import research
 from .strategies import Signal, build_strategies_from_params
@@ -118,6 +119,16 @@ def run_once(research_only: bool = False, push_sheets: bool = False):
         print(f"  analyzer vetoes -> setups:{vetoes['setups'] or '∅'} "
               f"combos:{len(vetoes['combos'])}")
 
+    # Morning signal verdicts (CLEAN/CAUTION/AVOID) written by the 10am CCR routine.
+    verdicts = verdicts_mod.load()
+    if verdicts:
+        avoids = [s for s, v in verdicts.items() if v == "AVOID"]
+        cautions = [s for s, v in verdicts.items() if v == "CAUTION"]
+        cleans = [s for s, v in verdicts.items() if v == "CLEAN"]
+        print(f"  morning verdicts loaded — CLEAN:{len(cleans)} CAUTION:{len(cautions)} AVOID:{len(avoids)}")
+    else:
+        verdicts = {}
+
     # "Ask me first": live queues for approval; paper auto-executes (unless you
     # opt to practice approvals on paper).
     require_approval = (settings.require_live_approval if not broker.paper
@@ -130,6 +141,14 @@ def run_once(research_only: bool = False, push_sheets: bool = False):
         if not apply_trade_analyzer(s, vetoes):
             print(f"  vetoed by analyzer: {s['strategy']}/{s['symbol']}")
             continue
+
+        verdict = verdicts.get(s["symbol"], "")
+        if verdict == "AVOID":
+            print(f"  AVOID {s['symbol']} (morning analysis) — skipped")
+            continue
+        if verdict == "CAUTION":
+            s = {**s, "reason": f"[CAUTION] {s.get('reason', '')}"}
+            print(f"  CAUTION {s['symbol']} — queuing with warning")
 
         risk_per_share = s["entry"] - s["stop"]
         risk_budget = equity * cfg.risk_per_trade_pct

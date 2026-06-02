@@ -101,11 +101,30 @@ The bot uses bracket orders (entry + stop + take-profit in one atomic order). Al
 | `import_proposals.py` | Import remote proposals into local DB |
 | `run_research.py` | Research-only scan (no trades) |
 
+## Morning verdicts integration
+
+The morning CCR analysis routine (10am ET) determines CLEAN/CAUTION/AVOID for each symbol and writes `morning_verdicts.json`. The engine and `morning_review.py` read this file to gate signals:
+
+- **CLEAN** — signal is surfaced in the interactive picker (`morning_review.py`)
+- **CAUTION** — queued with `[CAUTION]` prepended to the reason so it's visible in approvals
+- **AVOID** — skipped entirely with a printed message
+- **No verdict** — treated normally (no change to existing behavior)
+
+File format written by the CCR routine:
+```json
+{ "date": "2026-06-02", "verdicts": { "BB": "CLEAN", "GLD": "CAUTION", "AMD": "AVOID" } }
+```
+
+The file is stale-checked by date — if it's from a previous day, verdicts are ignored.
+
 ## Running
 
 ```bash
 # Research only (safe, no orders)
 python run_research.py
+
+# Interactive morning picker — run after the 10am CCR analysis completes
+python morning_review.py
 
 # Full run with approval gate
 python -m microbot.engine
