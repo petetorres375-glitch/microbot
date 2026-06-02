@@ -15,24 +15,14 @@ you a dashboard to watch it all.
 
 ## What it does
 
-1. **Three diversified strategies** (different market regimes):
-   - `trend_momentum` — EMA(20/50) cross + ADX trend filter. Rides trends.
-   - `mean_reversion` — RSI + Bollinger oversold dips, but only *above* the
-     200-day MA (buy weakness in an uptrend; never catch a falling knife).
-   - `breakout` — close above a 20-day high on above-average volume (Turtle-style).
-2. **Risk-first sizing** — risks a fixed % of equity per trade, sizes whole
-   shares to that risk, and **skips** trades it can't size safely. Every entry is
-   a **bracket order**: a 2:1 take-profit and a protective stop submitted together,
-   so the risk leg can never be forgotten.
-3. **Autoresearch (`screener.py`)** — backtests every strategy on every symbol,
-   ranks by a *robustness* score (`expectancy_in_R × √trades`, profit-factor
-   gated), and surfaces today's live signals. This is the honest version of
-   "find profitable stocks": it finds where each edge *historically* held up.
-4. **Dashboard** (Streamlit) — Schwab-style header (equity, buying power, day
-   trades, PDT) plus win/loss, win %, expectancy ($ and R), profit factor, max
-   drawdown, an equity curve, open positions, and a **per-ticker breakdown**.
-5. **Google Sheets tracker** (optional) — mirrors your watchlist + live signals
-   so you can follow "stocks to be analyzed" from your phone.
+- Scans 30+ stocks across 6 strategies every trading day
+- Scores and ranks every setup (drawdown-adjusted — deep losers penalized)
+- Pushes a ranked **Watchlist** and **Live Signals** tab to Google Sheets at 9:35 AM ET
+- Nothing trades without your approval (`python -m microbot.approvals`)
+- Places bracket orders on **Alpaca paper account** — entry + stop + take-profit in one atomic shot
+- Reconciles filled brackets from Alpaca into the journal every morning (real P&L, R-multiples)
+- Kill switch: `python -c "from microbot.broker import Broker; Broker().close_all()"` — cancels all Alpaca orders and closes every position instantly
+- Weekly optimizer proposes better parameters every Monday, you approve before anything changes
 
 ---
 
