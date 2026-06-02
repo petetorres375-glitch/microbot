@@ -30,7 +30,7 @@ class Settings:
     live_trading: bool = field(default_factory=lambda: _bool("LIVE_TRADING"))
 
     # --- Risk (defaults match risk.RiskConfig) ---
-    starting_equity: float = float(os.getenv("STARTING_EQUITY", "500"))
+    starting_equity: float = float(os.getenv("STARTING_EQUITY", "5000"))
     risk_per_trade_pct: float = float(os.getenv("RISK_PER_TRADE_PCT", "0.01"))
     reward_risk_ratio: float = float(os.getenv("REWARD_RISK_RATIO", "2.0"))
     max_open_positions: int = int(os.getenv("MAX_OPEN_POSITIONS", "4"))
