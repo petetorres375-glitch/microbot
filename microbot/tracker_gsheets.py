@@ -417,7 +417,8 @@ def push_positions() -> bool:
                 else:
                     health = f"{r}R At Risk"
             else:
-                health = "Winning" if pnl_pct > 0 else ("Breakeven" if pnl_pct == 0 else "At Risk")
+                label = "Winning" if pnl_pct > 0 else ("Breakeven" if pnl_pct == 0 else "At Risk")
+                health = f"{label} (no stop)"
 
             rows.append([
                 sym,
