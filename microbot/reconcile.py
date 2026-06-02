@@ -70,7 +70,9 @@ def _filled_price(order) -> float | None:
 
 
 def _status(order) -> str:
-    return str(getattr(order, "status", "")).lower()
+    s = getattr(order, "status", "")
+    val = s.value if hasattr(s, "value") else str(s)
+    return str(val).lower()
 
 
 def _build_closed_trade(open_row: dict, order) -> ClosedTrade | None:
