@@ -22,8 +22,10 @@ import json
 
 from . import journal
 from .broker import Broker
-from .risk import SizedTrade
-from .strategies import Signal
+from .config import settings
+from .risk import RiskConfig, SizedTrade, size_trade
+from .strategies import ALL_STRATEGIES, Signal, _bracket
+from .data import MarketData
 
 
 def pending():
@@ -101,6 +103,50 @@ def _interactive():
             print("       skipped (stays pending)")
 
 
+# ---- manual queue ----
+
+def queue_manual(symbol: str, strategy_name: str) -> dict:
+    """Force a trade into the approval queue and submit it immediately.
+
+    If the strategy's technical signal hasn't fired, an entry is constructed
+    at the current close price using an ATR-derived stop/target.
+    """
+    journal.init()
+    strat_cls = ALL_STRATEGIES.get(strategy_name)
+    if strat_cls is None:
+        return {"ok": False, "msg": f"unknown strategy '{strategy_name}'. "
+                f"Valid: {', '.join(ALL_STRATEGIES)}"}
+
+    strat = strat_cls(rr=settings.reward_risk_ratio)
+    md = MarketData()
+    df = md.bars(symbol, lookback_days=300)
+    if df is None or df.empty:
+        return {"ok": False, "msg": f"no bar data for {symbol}"}
+
+    sig = strat.evaluate(symbol, df)
+    if sig is None:
+        from . import indicators as ind
+        close = float(df["close"].iloc[-1])
+        atr = float(ind.atr(df, strat.atr_period).iloc[-1])
+        sig = _bracket(symbol, strategy_name, close, atr,
+                       strat.stop_mult, strat.rr, "manual override")
+
+    broker = Broker()
+    acct = broker.account()
+    cfg = RiskConfig(
+        risk_per_trade_pct=settings.risk_per_trade_pct,
+        max_open_positions=settings.max_open_positions,
+    )
+    sized = size_trade(sig, acct["equity"], acct["buying_power"], cfg, 0.0, 0)
+    if sized is None:
+        return {"ok": False, "msg": f"fails risk/sizing gate for {symbol} "
+                f"(1 share may exceed 1% risk budget)"}
+
+    aid = journal.enqueue_approval(sized, score=0.0)
+    result = approve(aid, broker)
+    return result
+
+
 # ---- parameter proposal review ----
 
 def pending_proposals():
@@ -154,6 +200,8 @@ def main():
     p.add_argument("--list", action="store_true", help="list pending trades and exit")
     p.add_argument("--params", action="store_true",
                    help="review pending parameter improvement proposals")
+    p.add_argument("--queue", nargs=2, metavar=("SYMBOL", "STRATEGY"),
+                   help="manually queue and submit a trade (e.g. --queue VALE trend_momentum)")
     args = p.parse_args()
 
     if args.params:
@@ -163,6 +211,11 @@ def main():
         for a in pending():
             print(f"#{a['id']}  {a['qty']}x {a['symbol']} ({a['strategy']})  "
                   f"stop {a['stop']} target {a['target']} risk ${a['dollar_risk']:.2f}")
+        return
+    if args.queue:
+        symbol, strategy = args.queue
+        result = queue_manual(symbol.upper(), strategy.lower())
+        print(result["msg"])
         return
     _interactive()
 
