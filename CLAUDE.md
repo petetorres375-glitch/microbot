@@ -91,6 +91,7 @@ The bot uses bracket orders (entry + stop + take-profit in one atomic order). Al
 | `microbot/journal.py` | SQLite trade journal |
 | `microbot/approvals.py` | Human approval gate |
 | `microbot/splits.py` | Corporate action / split handling |
+| `microbot/reconcile.py` | Closes open journal orders by checking Alpaca bracket legs |
 | `run_optimizer.py` | Run optimizer + write proposals JSON |
 | `import_proposals.py` | Import remote proposals into local DB |
 | `run_research.py` | Research-only scan (no trades) |
@@ -110,6 +111,10 @@ python -m microbot.approvals
 # Review optimizer proposals
 python import_proposals.py
 python -m microbot.approvals --params
+
+# Reconcile closed brackets into the journal
+python -m microbot.reconcile            # write closed trades
+python -m microbot.reconcile --dry-run  # preview without writing
 
 # Run optimizer manually
 python run_optimizer.py

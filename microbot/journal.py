@@ -28,7 +28,8 @@ CREATE TABLE IF NOT EXISTS orders (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     ts TEXT, alpaca_id TEXT, symbol TEXT, strategy TEXT, side TEXT,
     qty INTEGER, entry REAL, stop REAL, target REAL,
-    dollar_risk REAL, notional REAL, status TEXT
+    dollar_risk REAL, notional REAL, status TEXT,
+    closed INTEGER DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS trades (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -88,6 +89,10 @@ def _conn():
 def init():
     with _conn() as con:
         con.executescript(SCHEMA)
+        # migrate existing DBs that predate the `closed` column
+        cols = {r[1] for r in con.execute("PRAGMA table_info(orders)")}
+        if "closed" not in cols:
+            con.execute("ALTER TABLE orders ADD COLUMN closed INTEGER DEFAULT 0")
 
 
 def _now():
@@ -140,6 +145,21 @@ def fetch_orders(limit: int = 200) -> List[Dict]:
     with _conn() as con:
         return [dict(r) for r in con.execute(
             "SELECT * FROM orders ORDER BY ts DESC LIMIT ?", (limit,))]
+
+
+def fetch_open_orders() -> List[Dict]:
+    """Return orders not yet reconciled into a closed trade."""
+    with _conn() as con:
+        rows = con.execute(
+            "SELECT alpaca_id AS order_id, symbol, strategy, qty, entry, stop, target"
+            " FROM orders WHERE closed = 0 ORDER BY ts"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def mark_order_closed(order_id: str) -> None:
+    with _conn() as con:
+        con.execute("UPDATE orders SET closed = 1 WHERE alpaca_id = ?", (order_id,))
 
 
 # ---- approval queue (human-in-the-loop for live trading) ----
