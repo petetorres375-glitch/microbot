@@ -72,7 +72,7 @@ class Broker:
             symbol=s.symbol,
             qty=trade.qty,
             side=OrderSide.BUY,
-            time_in_force=TimeInForce.DAY,
+            time_in_force=TimeInForce.GTC,
             order_class=OrderClass.BRACKET,
             take_profit=TakeProfitRequest(limit_price=round(s.target, 2)),
             stop_loss=StopLossRequest(stop_price=round(s.stop, 2)),
