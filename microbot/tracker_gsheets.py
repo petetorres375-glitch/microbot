@@ -56,6 +56,17 @@ _COL_COLORS_POS = [
     {"red": 0.98, "green": 0.96, "blue": 0.68},  # Health      — light yellow
 ]
 
+_COL_COLORS_DT = [
+    {"red": 0.68, "green": 0.85, "blue": 0.90},  # Symbol      — light blue
+    {"red": 0.75, "green": 0.88, "blue": 0.75},  # Strategy    — light green
+    {"red": 0.98, "green": 0.88, "blue": 0.68},  # Qty         — light orange
+    {"red": 0.98, "green": 0.96, "blue": 0.68},  # Entry       — light yellow
+    {"red": 0.95, "green": 0.75, "blue": 0.75},  # Stop        — light red
+    {"red": 0.68, "green": 0.90, "blue": 0.80},  # Target      — light mint
+    {"red": 0.85, "green": 0.75, "blue": 0.92},  # $ Risk      — light purple
+    {"red": 0.90, "green": 0.88, "blue": 0.98},  # Time        — light lavender
+]
+
 _WHITE     = {"red": 1.0, "green": 1.0,  "blue": 1.0}
 _DARK_TEXT = {"red": 0.15, "green": 0.15, "blue": 0.15}
 _ROW_ALT   = {"red": 0.96, "green": 0.96, "blue": 0.98}  # subtle alternating row
@@ -117,6 +128,17 @@ _POS_GUIDE = [
     ("Target",   "Take-profit price from the bracket order — position exits automatically here"),
     ("Health",   "Trade quality: R-multiple showing how far price has moved toward target vs stop. "
                  "+1.0R = at target, -1.0R = at stop. STRONG (>+1R) / WINNING / BREAKEVEN / AT RISK"),
+]
+
+_DT_GUIDE = [
+    ("Symbol",   "Stock ticker symbol"),
+    ("Strategy", "Strategy that triggered the signal"),
+    ("Qty",      "Number of shares approved for the order"),
+    ("Entry",    "Entry price for the bracket order"),
+    ("Stop",     "Stop-loss price — exits automatically if price falls here"),
+    ("Target",   "Take-profit price — exits automatically if price reaches here"),
+    ("$ Risk",   "Dollar amount at risk on this trade (qty × |entry - stop|)"),
+    ("Time",     "Time the trade was approved today (local time)"),
 ]
 
 _GUIDE_HEADER_BG = {"red": 0.25, "green": 0.25, "blue": 0.25}
@@ -298,6 +320,16 @@ def _format_positions(ws, row_count: int):
     _add_guide(ws, row_count, _POS_GUIDE, 9)
 
 
+def _format_daily_trades(ws, row_count: int):
+    ws.freeze(rows=2)
+    _write_timestamp(ws, 8)
+    _format_header_cells(ws, _COL_COLORS_DT, 8)
+    _format_data_rows(ws, row_count, 8)
+    _col_widths(ws, [218, 160, 70, 100, 100, 100, 90, 160])
+    _row_height(ws, 1, max(row_count + 2, 3), 32)
+    _add_guide(ws, row_count, _DT_GUIDE, 8)
+
+
 def _native(v):
     """Convert numpy scalars to plain Python types so gspread can serialize them."""
     try:
@@ -439,4 +471,53 @@ def push_positions() -> bool:
         return True
     except Exception as e:
         print(f"  (gsheets) positions skipped: {e}")
+        return False
+
+
+def push_daily_trades() -> bool:
+    """Write today's approved trades (status=submitted) to a DailyTrades tab."""
+    if not settings.gsheet_id:
+        return False
+    try:
+        from datetime import date
+        from .journal import fetch_approvals
+
+        today = date.today().isoformat()
+        approvals = fetch_approvals(limit=200)
+        todays = [
+            a for a in approvals
+            if a.get("status") == "submitted" and (a.get("decided_ts") or "").startswith(today)
+        ]
+
+        sh = _client().open_by_key(settings.gsheet_id)
+        headers = ["Symbol", "Strategy", "Qty", "Entry", "Stop", "Target", "$ Risk", "Time"]
+        ws = _ensure_ws(sh, "DailyTrades", headers)
+
+        rows = []
+        for a in sorted(todays, key=lambda x: x.get("decided_ts") or ""):
+            ts = a.get("decided_ts") or ""
+            try:
+                from datetime import datetime, timezone
+                dt = datetime.fromisoformat(ts).astimezone()
+                time_str = dt.strftime("%I:%M %p")
+            except Exception:
+                time_str = ts[:16]
+            rows.append([
+                a["symbol"],
+                a["strategy"],
+                a["qty"],
+                round(float(a["entry"]), 2),
+                round(float(a["stop"]), 2),
+                round(float(a["target"]), 2),
+                round(float(a["dollar_risk"]), 2),
+                time_str,
+            ])
+
+        if rows:
+            ws.update(values=rows, range_name="A3")
+        _format_daily_trades(ws, len(rows))
+        print(f"  (gsheets) pushed {len(rows)} daily trades.")
+        return True
+    except Exception as e:
+        print(f"  (gsheets) daily trades skipped: {e}")
         return False

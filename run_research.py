@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """Convenience: scan + rank the universe, no trading. `python run_research.py`"""
+import time
 from microbot.engine import run_once
 from microbot.yahoo_scanner import fetch_candidates
-from microbot.tracker_gsheets import push_positions
+from microbot.tracker_gsheets import push_positions, push_daily_trades
 
 run_once(research_only=True, push_sheets=True)
+time.sleep(20)  # avoid Sheets write-quota 429 after Watchlist/LiveSignals writes
 push_positions()
+push_daily_trades()
 
 print("\n--- Yahoo Finance: new candidates outside universe ---")
 candidates = fetch_candidates(top=10)
