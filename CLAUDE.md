@@ -76,6 +76,14 @@ The engine prints an explicit skip message when even 1 share exceeds the 1% risk
 
 A bracket order submits three legs in one request: entry, stop-loss, and take-profit. **Atomic** means all three go in together — if the entry fills, the stop and target are guaranteed to exist. There is no risk of ending up in a position with no stop because a separate order failed.
 
+Bracket orders use `TimeInForce.GTC` (not DAY) so stop and take-profit legs survive overnight. A prior bug used DAY, which canceled all legs at market close and left positions unprotected — fixed 2026-06-03 (commit 8506ef4).
+
+## After-hours order management
+
+Alpaca only allows one sell order per position at a time (shares are "held" for the order). To have both a stop-loss and a take-profit live simultaneously, use **OCO (One Cancels Other)** orders via `LimitOrderRequest` with `order_class=OrderClass.OCO`, `take_profit=TakeProfitRequest(limit_price=...)`, and `stop_loss=StopLossRequest(stop_price=...)`. When one leg fills, the other is automatically canceled.
+
+After market close, bracket legs from a GTC bracket order remain active as linked OCO legs — no manual intervention needed for normally-entered positions. Only manually-placed orders (standalone stops or targets) require OCO replacement.
+
 ## Order sizing: whole shares only
 
 The bot uses bracket orders (entry + stop + take-profit in one atomic order). Alpaca bracket orders do not support fractional quantities, so sizing is always rounded down to whole shares. **Do not add fractional share support** — it would require splitting each trade into 3 separate orders, losing atomicity and adding orphaned-stop failure modes. Revisit only if moving to a real ~$500 account where 1 share regularly exceeds the risk budget; in that case, prefer trimming the universe to sub-$50 stocks first.
@@ -144,6 +152,12 @@ python -m microbot.reconcile --dry-run  # preview without writing
 python run_optimizer.py
 ```
 
+## Current focused universe (as of 2026-06-03)
+
+Active portfolio targets: **IREN, LEGN, VALE, LUNR, RGTI**. LUNR (Intuitive Machines, NASA/moon missions) and RGTI (Rigetti Computing, quantum/CHIPS Act) were added to `UNIVERSE` on 2026-06-03 after Yahoo Finance scanner and news validation. `MAX_OPEN_POSITIONS=5` to accommodate all five.
+
+Positions closed 2026-06-03 (culled in favor of focused portfolio): AEHR, BB, HPE, MRVL, NOK, PENG, RDW, USAR.
+
 ## Environment variables (.env)
 
 ```
@@ -151,6 +165,7 @@ ALPACA_API_KEY=...
 ALPACA_API_SECRET=...
 LIVE_TRADING=false
 STARTING_EQUITY=5000
+MAX_OPEN_POSITIONS=5
 INCLUDE_DIVIDEND_STOCKS=true
 INCLUDE_SPLIT_STOCKS=true
 GSHEET_ID=...
