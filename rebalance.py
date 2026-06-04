@@ -102,7 +102,7 @@ def _get_mid_price(symbol: str) -> float | None:
 
 
 def _place_bracket(broker: Broker, symbol: str, qty: int,
-                   stop: float, target: float, dry_run: bool) -> bool:
+                   entry: float, stop: float, target: float, dry_run: bool) -> bool:
     if dry_run:
         print(f"  [dry-run] would submit bracket: {qty} shares, stop={stop:.2f}, target={target:.2f}")
         return True
@@ -116,6 +116,8 @@ def _place_bracket(broker: Broker, symbol: str, qty: int,
             stop_loss=StopLossRequest(stop_price=round(stop, 2)),
         ))
         print(f"  ✓ bracket submitted: {order.id}")
+        from microbot.journal import log_manual_order
+        log_manual_order(str(order.id), symbol, qty, entry, stop, target)
         return True
     except Exception as e:
         print(f"  ✗ order failed: {e}")
@@ -238,7 +240,7 @@ def main():
                   f"risk=${dollar_risk:.2f}")
 
             if _confirm(f"  Place bracket for {qty} × {sym}? [Y/n]: "):
-                _place_bracket(broker, sym, qty, stop, tgt, dry_run)
+                _place_bracket(broker, sym, qty, entry, stop, tgt, dry_run)
             else:
                 print(f"  skipped")
             print()

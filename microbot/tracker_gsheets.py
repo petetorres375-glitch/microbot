@@ -423,6 +423,28 @@ def push_positions() -> bool:
                 elif otype == "limit" and o.limit_price:
                     targets[sym] = float(o.limit_price)
 
+        # Fall back to journal for any symbol missing stop/target (e.g. after hours
+        # when bracket legs are not returned, or manually placed orders).
+        from microbot.journal import fetch_open_orders, _conn as _jconn
+        for row in fetch_open_orders():
+            sym = row["symbol"]
+            if sym not in stops and row.get("stop"):
+                stops[sym] = float(row["stop"])
+            if sym not in targets and row.get("target"):
+                targets[sym] = float(row["target"])
+
+        # Secondary fallback: approvals table (covers positions entered via engine approval gate).
+        with _jconn() as con:
+            for row in con.execute(
+                "SELECT symbol, stop, target FROM approvals"
+                " WHERE status='submitted' AND stop IS NOT NULL"
+            ).fetchall():
+                sym = row["symbol"]
+                if sym not in stops and row["stop"]:
+                    stops[sym] = float(row["stop"])
+                if sym not in targets and row["target"]:
+                    targets[sym] = float(row["target"])
+
         sh = _client().open_by_key(settings.gsheet_id)
         pos_headers = ["Symbol", "Shares", "Entry", "Current", "P&L $", "P&L %", "Stop", "Target", "Health"]
         ws = _ensure_ws(sh, "Positions", pos_headers)

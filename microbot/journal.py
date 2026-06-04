@@ -146,6 +146,20 @@ def log_order(trade, alpaca_id: str, status: str):
         )
 
 
+def log_manual_order(alpaca_id: str, symbol: str, qty: int,
+                     entry: float, stop: float, target: float, strategy: str = "manual"):
+    """Record a manually-placed bracket order (e.g. from rebalance.py) in the orders table."""
+    dollar_risk = round(qty * (entry - stop), 2)
+    notional = round(qty * entry, 2)
+    with _conn() as con:
+        con.execute(
+            "INSERT INTO orders(ts,alpaca_id,symbol,strategy,side,qty,entry,stop,"
+            "target,dollar_risk,notional,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+            (_now(), alpaca_id, symbol, strategy, "buy", qty,
+             entry, stop, target, dollar_risk, notional, "submitted"),
+        )
+
+
 def log_closed_trade(t: Dict):
     with _conn() as con:
         con.execute(
