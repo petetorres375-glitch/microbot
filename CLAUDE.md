@@ -189,7 +189,15 @@ Use `--dry-run` to preview without placing orders. Built 2026-06-04 to reduce ma
 
 ## Current focused universe (as of 2026-06-04)
 
-Active portfolio: **IREN, LEGN, LUNR, TGTX, KEEL**. VALE stopped out 2026-06-04 at $15.84. TGTX (TG Therapeutics, positive BRIUMVI Phase 3 data, Goldman Sachs Healthcare Conference June 9) and KEEL (formerly Bitfarms, rebranded to AI/HPC infrastructure, 350MW+ capacity pipeline) added 2026-06-04. `MAX_OPEN_POSITIONS=5`.
+Active portfolio: **IREN, LEGN, LUNR, TGTX, KEEL**. VALE stopped out 2026-06-04 at $15.84. `MAX_OPEN_POSITIONS=5`.
+
+| Symbol | Entry | Notes |
+|---|---|---|
+| IREN | $69.80 | AI cloud infra (ex-Iris Energy). $3.65B Microsoft-backed GPU financing closed June 1; 800MW Australian data center announced June 3. Canaccord PT $79. Thesis intact despite -12% drawdown — broad sector rotation, not IREN-specific. |
+| LEGN | $37.12 | Legend Biotech. CARVYKTI Q1 sales $597M (+62% YoY). June 2: +42% on LB2501 in vivo CAR-T hitting 100% ORR in B-cell lymphoma (no lymphodepleting chemo). EHA oral presentation June 11-14 (next catalyst). HC Wainwright PT $65. |
+| LUNR | $32.40 | Intuitive Machines. $180.4M NASA South Pole contract (IM-5), $20M lunar imaging contracts, Lanteris acquisition. +200% over 6 months. Headwind: $500M ATM offering announced June 3 (dilutive); director sold $5.5M June 1. |
+| TGTX | $41.66 | TG Therapeutics. CARVYKTI rival — BRIUMVI for MS. June 3: positive Phase 1 subcutaneous BRIUMVI data (+10% on day). CEO fireside chat Goldman Sachs Healthcare Conference June 9 2pm ET. Phase 3 top-line data expected year-end 2026/early 2027. |
+| KEEL | $5.77 | Keel Infrastructure (ex-Bitfarms). Rebranded April 2026, pivoting Bitcoin mining → HPC/AI data centers. Sites: Panther Creek, Sharon, Moses Lake. Goal: 3 leases signed by year-end 2026. Pre-revenue; net loss -$145M last quarter. High-risk story stock. |
 
 ## Environment variables (.env)
 
