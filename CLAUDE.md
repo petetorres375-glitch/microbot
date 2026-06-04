@@ -6,15 +6,22 @@ A Python paper-trading bot connected to Alpaca's paper API. Starting equity ~$50
 
 ## Key design principle
 
-**The bot is a scanner and executor — the user is the decision layer.**
+**The morning CCR analysis is the decision layer — the bot executes.**
 
-The user's own trade analyzer consistently outperforms the bot's raw signals. The bot's job is to:
+The 10am ET CCR routine web-searches news on every symbol and delivers CLEAN/CAUTION/AVOID verdicts. Those verdicts are the sole gate for swing trades:
+
+- **CLEAN** → signal auto-executes when the engine runs (no human approval needed)
+- **Anything else** (CAUTION, AVOID, no verdict, stale file) → skipped entirely
+
+The bot's job is to:
 - Scan 30+ symbols across multiple strategies 24/7
 - Size positions correctly and never forget a stop
-- Surface ranked candidates for human review
-- Never trade emotionally
+- Auto-execute CLEAN signals without requiring the user to be present
+- Never trade a symbol the morning analysis flagged
 
-The approval gate (`python -m microbot.approvals`) exists precisely because human judgment on *which* setups to take is better than the bot's mathematical threshold. The bot catches things the user would miss; the user filters out things the bot can't see (earnings, news, macro, sector context).
+**Intraday (ORB)** is fully automated independently — scanner runs at 9:20 AM ET, no verdicts needed.
+
+`python -m microbot.approvals` is still available but no longer part of the normal flow.
 
 ## Universes
 
