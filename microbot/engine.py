@@ -72,12 +72,7 @@ def run_once(research_only: bool = False, push_sheets: bool = False):
     broker = Broker()
     acct = broker.account()
     mode = "LIVE" if not broker.paper else "PAPER"
-    print(f"[{mode}] equity=${acct['equity']:.2f} buying_power=${acct['buying_power']:.2f} "
-          f"daytrades={acct['daytrade_count']} PDT={acct['pattern_day_trader']}")
-
-    if acct["pattern_day_trader"] and acct["equity"] < 25000:
-        print("  ! PDT flag set & equity < $25k — day trades are restricted. "
-              "Favor swing (overnight) holds.")
+    print(f"[{mode}] equity=${acct['equity']:.2f} buying_power=${acct['buying_power']:.2f}")
 
     # Load any approved parameter improvements from the DB.
     active_params = journal.fetch_active_params()

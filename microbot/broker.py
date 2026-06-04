@@ -36,8 +36,6 @@ class Broker:
             "equity": float(a.equity),
             "cash": float(a.cash),
             "buying_power": float(a.buying_power),
-            "daytrade_count": int(a.daytrade_count),
-            "pattern_day_trader": bool(a.pattern_day_trader),
             "currency": a.currency,
         }
 

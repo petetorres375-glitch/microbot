@@ -62,8 +62,8 @@ if acct:
     c[0].metric("Equity", f"${acct['equity']:,.2f}")
     c[1].metric("Buying Power", f"${acct['buying_power']:,.2f}")
     c[2].metric("Cash", f"${acct['cash']:,.2f}")
-    c[3].metric("Day Trades (5d)", acct["daytrade_count"])
-    c[4].metric("PDT Flag", "YES" if acct["pattern_day_trader"] else "no")
+    c[3].metric("Open Positions", len(acct.get("positions", [])))
+    c[4].metric("Intraday BP", f"${acct['buying_power']:,.0f}")
 else:
     c[0].metric("Starting Equity", f"${settings.starting_equity:,.2f}")
 
