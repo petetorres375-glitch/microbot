@@ -166,7 +166,7 @@ def run_once(research_only: bool = False, push_sheets: bool = False):
         open_risk += sized.dollar_risk
         bp -= sized.notional
 
-        if require_approval:
+        if require_approval and verdict != "CLEAN":
             aid = journal.enqueue_approval(sized, score=s.get("score", 0.0))
             queued += 1
             print(f"  QUEUED #{aid}: {sized.qty}x {s['symbol']} stop {s['stop']} "
@@ -175,7 +175,8 @@ def run_once(research_only: bool = False, push_sheets: bool = False):
             try:
                 order = broker.submit_bracket(sized)
                 journal.log_order(sized, str(order.id), str(order.status))
-                print(f"  ORDER {sized.qty}x {s['symbol']} @~{s['entry']} "
+                tag = "AUTO(CLEAN)" if verdict == "CLEAN" else "ORDER"
+                print(f"  {tag} {sized.qty}x {s['symbol']} @~{s['entry']} "
                       f"stop {s['stop']} target {s['target']} (risk ${sized.dollar_risk:.2f})")
             except Exception as e:
                 print(f"  order failed for {s['symbol']}: {e}")
