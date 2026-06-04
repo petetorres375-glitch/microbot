@@ -135,8 +135,19 @@ def reconcile_once(broker: Broker | None = None, dry_run: bool = False) -> list[
 
         trade = _build_closed_trade(row, order)
         if trade is None:
-            print(f"  · {row['symbol']} still open")
-            continue
+            # Check if the position itself is gone from Alpaca (manual close)
+            held = {p.symbol for p in broker.client.get_all_positions()}
+            if row["symbol"] not in held and _status(order) == "filled":
+                # Entry filled but position gone and no bracket leg filled →
+                # position was closed manually outside the bracket system
+                trade = ClosedTrade(
+                    oid, row["symbol"], row["strategy"], int(row["qty"]),
+                    float(row["entry"]), float(row["entry"]),
+                    "manual", 0.0, 0.0,
+                )
+            else:
+                print(f"  · {row['symbol']} still open")
+                continue
 
         closed.append(trade)
         if dry_run:

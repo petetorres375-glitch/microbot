@@ -151,15 +151,27 @@ python -m microbot.approvals --params
 python -m microbot.reconcile            # write closed trades
 python -m microbot.reconcile --dry-run  # preview without writing
 
+# Rebalance portfolio to a target set of symbols (one command replaces manual closes + buys)
+python rebalance.py --target IREN,LEGN,LUNR,TGTX,KEEL   # execute
+python rebalance.py --target IREN,LEGN,LUNR,TGTX,KEEL --dry-run  # preview
+
 # Run optimizer manually
 python run_optimizer.py
 ```
 
-## Current focused universe (as of 2026-06-03)
+## Rebalance command (`rebalance.py`)
 
-Active portfolio targets: **IREN, LEGN, VALE, LUNR, RGTI**. LUNR (Intuitive Machines, NASA/moon missions) and RGTI (Rigetti Computing, quantum/CHIPS Act) were added to `UNIVERSE` on 2026-06-03 after Yahoo Finance scanner and news validation. `MAX_OPEN_POSITIONS=5` to accommodate all five.
+Automates portfolio restructuring in one step. Given a `--target` list:
+1. **Closes** any position not in the target (cancels bracket legs first, then submits close)
+2. **Scans** for live signals on symbols to buy; if no signal, prompts for stop price
+3. **Places** GTC bracket orders for each approved buy
+4. **Updates** the journal (marks closed positions, logs manual close records)
 
-Positions closed 2026-06-03 (culled in favor of focused portfolio): AEHR, BB, HPE, MRVL, NOK, PENG, RDW, USAR.
+Use `--dry-run` to preview without placing orders. Built 2026-06-04 to reduce manual workflow.
+
+## Current focused universe (as of 2026-06-04)
+
+Active portfolio: **IREN, LEGN, LUNR, TGTX, KEEL**. VALE stopped out 2026-06-04 at $15.84. TGTX (TG Therapeutics, positive BRIUMVI Phase 3 data, Goldman Sachs Healthcare Conference June 9) and KEEL (formerly Bitfarms, rebranded to AI/HPC infrastructure, 350MW+ capacity pipeline) added 2026-06-04. `MAX_OPEN_POSITIONS=5`.
 
 ## Environment variables (.env)
 
