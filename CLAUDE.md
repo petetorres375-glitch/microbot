@@ -41,6 +41,7 @@ The approval gate (`python -m microbot.approvals`) exists precisely because huma
 | Morning signal analysis | `trig_019TFaNMJyiH1atY2kykNHGD` | Weekdays 10:00 AM ET | Web-searches news on universe, delivers CLEAN/CAUTION/AVOID verdicts |
 | Daily research scan | `trig_019qsZJECstukLDhqDFXcv6R` | Weekdays 9:35 AM ET | Runs `run_research.py`, pushes ranked candidates + live signals to Google Sheets |
 | Weekly optimizer | `trig_01PYxALzYVnZuA88Kpror5Qo` | Mondays 9:00 AM ET | Walk-forward grid search, pushes `optimizer_proposals.json` to repo if improvements found |
+| Intraday pre-market scanner | `trig_01TX4CDGSGMLscLLgtkgeKAr` | Weekdays 9:15 AM ET | Runs gap scanner, web-searches news on candidates, prints CLEAN/MIXED/AVOID DAY briefing |
 
 View routine results at: https://claude.ai/code/routines
 
@@ -140,6 +141,11 @@ python morning_review.py
 # Full run with approval gate
 python -m microbot.engine
 
+# Day trading (ORB) — runs scanner then engine, auto-closes at 3:55 PM ET
+python run_intraday.py             # scan + trade
+python run_intraday.py --scan-only # just print candidates, no trading
+python -m microbot.intraday_scanner  # scanner only (writes intraday_candidates.json)
+
 # Review pending trade approvals
 python -m microbot.approvals
 
@@ -158,6 +164,18 @@ python rebalance.py --target IREN,LEGN,LUNR,TGTX,KEEL --dry-run  # preview
 # Run optimizer manually
 python run_optimizer.py
 ```
+
+## Day trading layer (ORB)
+
+Added 2026-06-04. Fully automated Opening Range Breakout engine that runs alongside the swing bot.
+
+**Risk rules:** 1% equity per trade · max 2 concurrent intraday positions · 2% daily loss limit halts trading · hard EOD close at 3:55 PM ET — never overnight
+
+**Strategy:** 5-minute ORB — entry on break above first 5-min candle high, stop at ORB low, scale out half at 2:1, trail remaining at 50% of max gain above entry
+
+**Automation:** Cron runs `run_intraday.py` at 9:20 AM ET weekdays. Scanner finds gap 5%+ candidates with 2x+ rel volume. CCR routine (`trig_01TX4CDGSGMLscLLgtkgeKAr`) runs at 9:15 AM ET to print a pre-market news briefing on candidates.
+
+**Performance gate:** After 20+ trades, pull any strategy below 45% win rate. Track results in `intraday_trades` and `intraday_daily` journal tables.
 
 ## Rebalance command (`rebalance.py`)
 

@@ -72,6 +72,32 @@ CREATE TABLE IF NOT EXISTS scan_log (
     key TEXT PRIMARY KEY,
     ts TEXT
 );
+CREATE TABLE IF NOT EXISTS intraday_trades (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT,
+    symbol TEXT,
+    strategy TEXT DEFAULT 'orb',
+    qty INTEGER,
+    entry REAL,
+    stop REAL,
+    target REAL,
+    half_exit_price REAL,
+    exit_price REAL,
+    exit_reason TEXT,
+    pnl REAL,
+    r_multiple REAL,
+    status TEXT DEFAULT 'open',
+    alpaca_entry_id TEXT,
+    alpaca_stop_id TEXT,
+    ts_open TEXT,
+    ts_close TEXT
+);
+CREATE TABLE IF NOT EXISTS intraday_daily (
+    date TEXT PRIMARY KEY,
+    realized_pnl REAL DEFAULT 0,
+    trades_taken INTEGER DEFAULT 0,
+    halted INTEGER DEFAULT 0
+);
 """
 
 
