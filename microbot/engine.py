@@ -138,12 +138,9 @@ def run_once(research_only: bool = False, push_sheets: bool = False):
             continue
 
         verdict = verdicts.get(s["symbol"], "")
-        if verdict == "AVOID":
-            print(f"  AVOID {s['symbol']} (morning analysis) — skipped")
+        if verdict != "CLEAN":
+            print(f"  skip {s['symbol']}: verdict={verdict or 'none'} — CLEAN required")
             continue
-        if verdict == "CAUTION":
-            s = {**s, "reason": f"[CAUTION] {s.get('reason', '')}"}
-            print(f"  CAUTION {s['symbol']} — queuing with warning")
 
         risk_per_share = s["entry"] - s["stop"]
         risk_budget = equity * cfg.risk_per_trade_pct
@@ -166,24 +163,13 @@ def run_once(research_only: bool = False, push_sheets: bool = False):
         open_risk += sized.dollar_risk
         bp -= sized.notional
 
-        if require_approval and verdict != "CLEAN":
-            aid = journal.enqueue_approval(sized, score=s.get("score", 0.0))
-            queued += 1
-            print(f"  QUEUED #{aid}: {sized.qty}x {s['symbol']} stop {s['stop']} "
-                  f"target {s['target']} (risk ${sized.dollar_risk:.2f}) — awaiting approval")
-        else:
-            try:
-                order = broker.submit_bracket(sized)
-                journal.log_order(sized, str(order.id), str(order.status))
-                tag = "AUTO(CLEAN)" if verdict == "CLEAN" else "ORDER"
-                print(f"  {tag} {sized.qty}x {s['symbol']} @~{s['entry']} "
-                      f"stop {s['stop']} target {s['target']} (risk ${sized.dollar_risk:.2f})")
-            except Exception as e:
-                print(f"  order failed for {s['symbol']}: {e}")
-
-    if queued:
-        notify.notify(f"microbot has {queued} trade(s) awaiting your approval. "
-                      f"Review: `python -m microbot.approvals` or the dashboard.")
+        try:
+            order = broker.submit_bracket(sized)
+            journal.log_order(sized, str(order.id), str(order.status))
+            print(f"  AUTO(CLEAN) {sized.qty}x {s['symbol']} @~{s['entry']} "
+                  f"stop {s['stop']} target {s['target']} (risk ${sized.dollar_risk:.2f})")
+        except Exception as e:
+            print(f"  order failed for {s['symbol']}: {e}")
 
     notify.notify_summary(
         signals=len(result["live_signals"]),
