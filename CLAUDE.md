@@ -45,10 +45,11 @@ The bot's job is to:
 
 | Routine | ID | Schedule | Purpose |
 |---|---|---|---|
-| Morning signal analysis | `trig_019TFaNMJyiH1atY2kykNHGD` | Weekdays 10:00 AM ET | Web-searches news on universe, delivers CLEAN/CAUTION/AVOID verdicts |
-| Daily research scan | `trig_019qsZJECstukLDhqDFXcv6R` | Weekdays 9:35 AM ET | Runs `run_research.py`, pushes ranked candidates + live signals to Google Sheets |
-| Weekly optimizer | `trig_01PYxALzYVnZuA88Kpror5Qo` | Mondays 9:00 AM ET | Walk-forward grid search, pushes `optimizer_proposals.json` to repo if improvements found |
+| Morning signal analysis | `trig_019TFaNMJyiH1atY2kykNHGD` | Weekdays 8:30 AM ET | Web-searches news on universe, delivers CLEAN/CAUTION/AVOID verdicts, pushes `morning_verdicts.json` to repo |
 | Intraday pre-market scanner | `trig_01TX4CDGSGMLscLLgtkgeKAr` | Weekdays 9:15 AM ET | Runs gap scanner, web-searches news on candidates, prints CLEAN/MIXED/AVOID DAY briefing |
+| Daily research scan | `trig_019qsZJECstukLDhqDFXcv6R` | Weekdays 9:35 AM ET | Runs `run_research.py`, pushes ranked candidates + live signals to Google Sheets |
+| Swing engine — execute CLEAN signals | `trig_01S594UwnSLYX9HNtNZmeXgG` | Weekdays 9:35 AM ET | Runs `microbot.engine`, auto-executes CLEAN signals, skips everything else |
+| Weekly optimizer | `trig_01PYxALzYVnZuA88Kpror5Qo` | Mondays 9:00 AM ET | Walk-forward grid search, pushes `optimizer_proposals.json` to repo if improvements found |
 
 View routine results at: https://claude.ai/code/routines
 
