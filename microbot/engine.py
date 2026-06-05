@@ -25,6 +25,7 @@ from . import feedback
 from . import notify
 from . import splits
 from . import verdicts as verdicts_mod
+from . import diagnostics
 from .risk import RiskConfig, size_trade
 from .screener import research
 from .strategies import Signal, build_strategies_from_params
@@ -59,6 +60,8 @@ def _confirm_live():
 
 
 def run_once(research_only: bool = False, push_sheets: bool = False):
+    if not diagnostics.run():
+        raise SystemExit("Diagnostics failed — engine aborted.")
     journal.init()
     _confirm_live()
 
