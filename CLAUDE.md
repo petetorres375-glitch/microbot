@@ -63,6 +63,23 @@ Every execution routine runs a health check before doing real work:
 
 Both can be run locally at any time.
 
+### Daily diagnostics report (Google Drive)
+
+After the 7:30 AM pre-market check runs, the routine saves a Google Doc to Drive named:
+
+```
+microbot Pre-Market Diagnostics - YYYY-MM-DD [GO]
+microbot Pre-Market Diagnostics - YYYY-MM-DD [NO-GO]
+```
+
+The doc contains the full diagnostics checklist output plus the day's routine schedule. Find it in Google Drive under the account pete.torres.375@gmail.com.
+
+**Known CCR false positives** — the diagnostics container has restricted outbound networking. These two checks always fail in that environment and should be ignored in the Drive report:
+- `alpaca_connect` — Host not in allowlist (network sandbox, not a real credential issue)
+- `db_missing_tables` — fresh container starts with no DB (trading routines have a persistent local DB)
+
+Focus on: morning verdicts freshness, core module imports, and git repo access — those reflect real system state.
+
 ## Self-improvement loop (safe version)
 
 The weekly remote optimizer does walk-forward grid search and proposes better strategy parameters. **Nothing is auto-promoted.** Workflow:
