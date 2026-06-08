@@ -47,7 +47,7 @@ The bot's job is to:
 |---|---|---|---|
 | Pre-Market Diagnostics | `trig_01RGqaa5TuyTVHn2ThGDmxSg` | Weekdays 7:30 AM ET | Full system check: credentials, Alpaca, open position stop audit, DB, git, core imports. GO/NO-GO verdict with ~2 hours to fix before trading starts |
 | Morning signal analysis | `trig_019TFaNMJyiH1atY2kykNHGD` | Weekdays 8:30 AM ET | Web-searches news on universe, delivers CLEAN/CAUTION/AVOID verdicts, pushes `morning_verdicts.json` to repo |
-| Intraday pre-market scanner | `trig_01TX4CDGSGMLscLLgtkgeKAr` | Weekdays 9:15 AM ET | Runs diagnostics, then gap scanner, web-searches news on candidates, prints CLEAN/MIXED/AVOID DAY briefing |
+| Intraday pre-market scanner | `trig_01TX4CDGSGMLscLLgtkgeKAr` | Weekdays 9:15 AM ET | Runs gap scanner, web-searches news on candidates, prints CLEAN/MIXED/AVOID DAY briefing |
 | Daily research scan | `trig_019qsZJECstukLDhqDFXcv6R` | Weekdays 9:35 AM ET | Runs `run_research.py`, pushes ranked candidates + live signals to Google Sheets |
 | Weekly optimizer | `trig_01PYxALzYVnZuA88Kpror5Qo` | Mondays 9:00 AM ET | Walk-forward grid search, pushes `optimizer_proposals.json` to repo if improvements found |
 
@@ -72,7 +72,7 @@ Logs: `engine.log` and `intraday.log` in the repo root.
 Every execution routine runs a health check before doing real work:
 
 - **`python -m microbot.premarket_check`** — full pre-market audit (7:30 AM routine). Checks credentials, Alpaca connection, account equity, every open position's active stop order, verdicts freshness, DB integrity, git repo, and core module imports. Prints a GO/NO-GO verdict.
-- **`python -m microbot.diagnostics`** — lightweight pre-engine check (embedded in intraday scanner and swing engine routines). Same critical checks, skips the position stop audit and git check. Exits non-zero on failure, aborting the routine before any orders are placed.
+- **`python -m microbot.diagnostics`** — lightweight pre-engine check. Same critical checks, skips the position stop audit and git check. Exits non-zero on failure. Run locally before the engine if needed; **not embedded in any CCR routine** (CCR sandbox blocks Alpaca, causing false failures).
 
 Both can be run locally at any time.
 
@@ -92,6 +92,11 @@ The doc contains the full diagnostics checklist output plus the day's routine sc
 - `db_missing_tables` — fresh container starts with no DB (trading routines have a persistent local DB)
 
 Focus on: morning verdicts freshness, core module imports, and git repo access — those reflect real system state.
+
+**CCR networking limitations (2026-06-08):** The CCR container cannot connect to Alpaca at all — not just in diagnostics, but in any code. As a result:
+- The swing engine CCR routine (`trig_01S594UwnSLYX9HNtNZmeXgG`) is **disabled** — execution runs via local cron instead
+- The intraday scanner CCR routine no longer runs diagnostics — it goes straight to the gap scan and web search briefing
+- The morning analysis routine uses a GitHub PAT embedded in the push URL to authenticate `git push` (the CCR container has no stored credentials)
 
 ## Self-improvement loop (safe version)
 
