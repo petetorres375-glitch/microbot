@@ -49,10 +49,23 @@ The bot's job is to:
 | Morning signal analysis | `trig_019TFaNMJyiH1atY2kykNHGD` | Weekdays 8:30 AM ET | Web-searches news on universe, delivers CLEAN/CAUTION/AVOID verdicts, pushes `morning_verdicts.json` to repo |
 | Intraday pre-market scanner | `trig_01TX4CDGSGMLscLLgtkgeKAr` | Weekdays 9:15 AM ET | Runs diagnostics, then gap scanner, web-searches news on candidates, prints CLEAN/MIXED/AVOID DAY briefing |
 | Daily research scan | `trig_019qsZJECstukLDhqDFXcv6R` | Weekdays 9:35 AM ET | Runs `run_research.py`, pushes ranked candidates + live signals to Google Sheets |
-| Swing engine — execute CLEAN signals | `trig_01S594UwnSLYX9HNtNZmeXgG` | Weekdays 9:35 AM ET | Runs diagnostics, then `microbot.engine`, auto-executes CLEAN signals, skips everything else |
 | Weekly optimizer | `trig_01PYxALzYVnZuA88Kpror5Qo` | Mondays 9:00 AM ET | Walk-forward grid search, pushes `optimizer_proposals.json` to repo if improvements found |
 
 View routine results at: https://claude.ai/code/routines
+
+## Local cron jobs (execution layer)
+
+CCR routines handle analysis and research. **Execution (actual order placement) runs locally** — the CCR container's network sandbox blocks outbound connections to Alpaca, so the engine must run on the local machine where Alpaca API is reachable.
+
+```
+# crontab -l
+35 9  * * 1-5   python -m microbot.engine    # swing engine — reads verdicts, places GTC bracket orders
+20 9  * * 1-5   python run_intraday.py       # ORB intraday engine — scanner + trade, closes at 3:55 PM ET
+```
+
+Logs: `engine.log` and `intraday.log` in the repo root.
+
+**Note:** The CCR swing engine routine (`trig_01S594UwnSLYX9HNtNZmeXgG`) is **disabled** — it could never connect to Alpaca from the sandbox. The local cron is the sole execution path.
 
 ## Diagnostics layer
 
