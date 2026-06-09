@@ -60,11 +60,13 @@ CCR routines handle analysis and research. **Execution (actual order placement) 
 ```
 # crontab -l
 SHELL=/bin/bash
-35 9 * * 1-5 cd /home/lenovo-home/microbot && source .venv/bin/activate && python -m microbot.engine >> /home/lenovo-home/microbot/engine.log 2>&1
+35 9 * * 1-5 cd /home/lenovo-home/microbot && git pull --quiet && source .venv/bin/activate && python -m microbot.engine >> /home/lenovo-home/microbot/engine.log 2>&1
 20 9 * * 1-5 cd /home/lenovo-home/microbot && source .venv/bin/activate && python run_intraday.py >> /home/lenovo-home/microbot/intraday.log 2>&1
 ```
 
 **Important:** `SHELL=/bin/bash` is required — cron defaults to `/bin/sh` (dash on Ubuntu) which does not support `source`. Without it, both jobs silently fail at the activate step and never run.
+
+The engine cron does `git pull` before running so it always picks up the latest `morning_verdicts.json` even if the 8:30 AM CCR push was delayed. Without this, the engine can run on yesterday's stale verdicts and skip all signals.
 
 Logs: `engine.log` and `intraday.log` in the repo root.
 
