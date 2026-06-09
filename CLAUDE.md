@@ -59,9 +59,12 @@ CCR routines handle analysis and research. **Execution (actual order placement) 
 
 ```
 # crontab -l
-35 9  * * 1-5   python -m microbot.engine    # swing engine — reads verdicts, places GTC bracket orders
-20 9  * * 1-5   python run_intraday.py       # ORB intraday engine — scanner + trade, closes at 3:55 PM ET
+SHELL=/bin/bash
+35 9 * * 1-5 cd /home/lenovo-home/microbot && source .venv/bin/activate && python -m microbot.engine >> /home/lenovo-home/microbot/engine.log 2>&1
+20 9 * * 1-5 cd /home/lenovo-home/microbot && source .venv/bin/activate && python run_intraday.py >> /home/lenovo-home/microbot/intraday.log 2>&1
 ```
+
+**Important:** `SHELL=/bin/bash` is required — cron defaults to `/bin/sh` (dash on Ubuntu) which does not support `source`. Without it, both jobs silently fail at the activate step and never run.
 
 Logs: `engine.log` and `intraday.log` in the repo root.
 
