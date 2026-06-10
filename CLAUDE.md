@@ -61,7 +61,7 @@ CCR routines handle analysis and research. **Execution (actual order placement) 
 # crontab -l
 SHELL=/bin/bash
 35 9 * * 1-5 cd /home/lenovo-home/microbot && git pull --quiet && source .venv/bin/activate && python -m microbot.engine >> /home/lenovo-home/microbot/engine.log 2>&1
-20 9 * * 1-5 cd /home/lenovo-home/microbot && source .venv/bin/activate && python run_intraday.py >> /home/lenovo-home/microbot/intraday.log 2>&1
+31 9 * * 1-5 cd /home/lenovo-home/microbot && source .venv/bin/activate && python run_intraday.py >> /home/lenovo-home/microbot/intraday.log 2>&1
 ```
 
 **Important:** `SHELL=/bin/bash` is required — cron defaults to `/bin/sh` (dash on Ubuntu) which does not support `source`. Without it, both jobs silently fail at the activate step and never run.
@@ -233,7 +233,7 @@ Added 2026-06-04. Fully automated Opening Range Breakout engine that runs alongs
 
 **Strategy:** 5-minute ORB — entry on break above first 5-min candle high, stop at ORB low, scale out half at 2:1, trail remaining at 50% of max gain above entry
 
-**Automation:** Cron runs `run_intraday.py` at 9:20 AM ET weekdays. Scanner finds gap 5%+ candidates with 2x+ rel volume. CCR routine (`trig_01TX4CDGSGMLscLLgtkgeKAr`) runs at 9:15 AM ET to print a pre-market news briefing on candidates.
+**Automation:** Cron runs `run_intraday.py` at 9:31 AM ET weekdays (1 minute after open, so volume data is real). Scanner finds gap 5%+ candidates with 2x+ pace-adjusted rel volume (per-minute rate vs. historical average, not raw cumulative). CCR routine (`trig_01TX4CDGSGMLscLLgtkgeKAr`) runs at 9:15 AM ET to print a pre-market news briefing on candidates.
 
 **Performance gate:** After 20+ trades, pull any strategy below 45% win rate. Track results in `intraday_trades` and `intraday_daily` journal tables.
 

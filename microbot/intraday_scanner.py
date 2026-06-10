@@ -13,9 +13,11 @@ Run standalone:
 """
 from __future__ import annotations
 
+import datetime
 import json
 from datetime import date
 from typing import Dict, List, Optional
+from zoneinfo import ZoneInfo
 
 import yfinance as yf
 from alpaca.data.historical import StockHistoricalDataClient
@@ -68,11 +70,22 @@ def _batch_snapshots(symbols: List[str]) -> Dict:
 
 
 def _rel_volume(symbol: str, current_volume: float) -> float:
-    """Compare today's volume so far to 3-month average daily volume."""
+    """Pace-adjusted relative volume: today's per-minute rate vs. historical average.
+
+    Comparing raw cumulative volume to a full-day average is meaningless at open —
+    only 5 minutes of volume can't equal a full day. Instead measure trading *pace*:
+    (today's volume / elapsed minutes) / (avg_daily / 390 trading minutes).
+    A value of 2.0 means the stock is trading at 2x its normal per-minute rate.
+    """
     try:
+        now_et = datetime.datetime.now(ZoneInfo("America/New_York"))
+        market_open = now_et.replace(hour=9, minute=30, second=0, microsecond=0)
+        elapsed_minutes = max(1.0, (now_et - market_open).total_seconds() / 60)
         avg = yf.Ticker(symbol).fast_info.three_month_average_volume
         if avg and avg > 0:
-            return round(current_volume / avg, 2)
+            per_min_today = current_volume / elapsed_minutes
+            per_min_avg = avg / 390
+            return round(per_min_today / per_min_avg, 2)
     except Exception:
         pass
     return 0.0
