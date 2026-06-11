@@ -39,6 +39,7 @@ INTRADAY_UNIVERSE = [
 
 MIN_GAP_PCT = 0.05
 MIN_REL_VOL = 2.0
+MIN_PRICE = 5.0
 CANDIDATES_FILE = "intraday_candidates.json"
 
 
@@ -92,7 +93,8 @@ def _rel_volume(symbol: str, current_volume: float) -> float:
 
 
 def scan(top: int = 5, min_gap: float = MIN_GAP_PCT,
-         min_relvol: float = MIN_REL_VOL) -> List[Dict]:
+         min_relvol: float = MIN_REL_VOL,
+         min_price: float = MIN_PRICE) -> List[Dict]:
     """
     Find today's top day trading candidates.
 
@@ -125,6 +127,9 @@ def scan(top: int = 5, min_gap: float = MIN_GAP_PCT,
         elif snap.minute_bar:
             price = float(snap.minute_bar.close)
         else:
+            continue
+
+        if price < min_price:
             continue
 
         gap_pct = (price - prev_close) / prev_close
@@ -178,9 +183,12 @@ def main():
                    help="Minimum gap %% (default: 0.05 = 5%%)")
     p.add_argument("--min-relvol", type=float, default=MIN_REL_VOL,
                    help="Minimum relative volume (default: 2.0)")
+    p.add_argument("--min-price", type=float, default=MIN_PRICE,
+                   help="Minimum price filter (default: 5.0)")
     args = p.parse_args()
 
-    candidates = scan(top=args.top, min_gap=args.min_gap, min_relvol=args.min_relvol)
+    candidates = scan(top=args.top, min_gap=args.min_gap, min_relvol=args.min_relvol,
+                      min_price=args.min_price)
 
     if not candidates:
         print("No qualifying candidates today.")
