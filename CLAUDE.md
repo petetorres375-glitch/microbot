@@ -247,16 +247,15 @@ Automates portfolio restructuring in one step. Given a `--target` list:
 
 Use `--dry-run` to preview without placing orders. Built 2026-06-04 to reduce manual workflow.
 
-## Current focused universe (as of 2026-06-10)
+## Current focused universe (as of 2026-06-11)
 
-Active portfolio: **BTI, GOOG**. `MAX_OPEN_POSITIONS=5` — 3 slots open.
+Active portfolio: **BTI**. `MAX_OPEN_POSITIONS=5` — 4 slots open.
 
 | Symbol | Entry | Notes |
 |---|---|---|
-| BTI | $59.82 | British American Tobacco. Dividend momentum setup. 17 shares, +1.4% as of 2026-06-10. |
-| GOOG | $359.00 | Alphabet. Trend momentum setup. 3 shares, +1.5% as of 2026-06-10. |
+| BTI | $59.82 | British American Tobacco. Dividend momentum setup. 17 shares, +3.2% as of 2026-06-11. |
 
-Recently closed: TGTX hit target +$88.76 (+1.52R) on 2026-06-04. KEEL stopped out -$52.36 (-1.00R) on 2026-06-04. LEGN manual close $0 on 2026-06-04. IREN stopped out 2026-06-04. LUNR stopped out 2026-06-04. VALE stopped out 2026-06-04 at $15.84.
+Recently closed: GOOG stopped out 2026-06-11 at $344.36 (~-1.0R). TGTX hit target +$88.76 (+1.52R) on 2026-06-04. KEEL stopped out -$52.36 (-1.00R) on 2026-06-04. LEGN manual close $0 on 2026-06-04. IREN stopped out 2026-06-04. LUNR stopped out 2026-06-04. VALE stopped out 2026-06-04 at $15.84.
 
 ## Environment variables (.env)
 
