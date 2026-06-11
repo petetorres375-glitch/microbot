@@ -28,6 +28,7 @@ from typing import Dict, List, Optional
 import zoneinfo
 
 import pandas as pd
+from alpaca.data.enums import DataFeed
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockBarsRequest, StockSnapshotRequest
 from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
@@ -184,6 +185,7 @@ class IntradayEngine:
             timeframe=TimeFrame(ORB_WINDOW_MINUTES, TimeFrameUnit.Minute),
             start=start,
             end=end,
+            feed=DataFeed.IEX,
         )
         try:
             bars_df = self.data.get_stock_bars(req).df
@@ -221,7 +223,7 @@ class IntradayEngine:
         symbols = list(self.states.keys())
         try:
             snaps = self.data.get_stock_snapshot(
-                StockSnapshotRequest(symbol_or_symbols=symbols)
+                StockSnapshotRequest(symbol_or_symbols=symbols, feed=DataFeed.IEX)
             )
             return {sym: float(snap.latest_trade.price)
                     for sym, snap in snaps.items()

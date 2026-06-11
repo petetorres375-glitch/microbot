@@ -20,6 +20,7 @@ from typing import Dict, List, Optional
 from zoneinfo import ZoneInfo
 
 import yfinance as yf
+from alpaca.data.enums import DataFeed
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockSnapshotRequest
 
@@ -62,7 +63,7 @@ def _batch_snapshots(symbols: List[str]) -> Dict:
         chunk = symbols[i:i + 100]
         try:
             snaps = client.get_stock_snapshot(
-                StockSnapshotRequest(symbol_or_symbols=chunk)
+                StockSnapshotRequest(symbol_or_symbols=chunk, feed=DataFeed.IEX)
             )
             result.update(snaps)
         except Exception:
