@@ -82,7 +82,12 @@ class IntradayEngine:
             paper=not settings.live_trading,
         )
         self.data = StockHistoricalDataClient(settings.api_key, settings.api_secret)
-        self.equity = float(self.trading.get_account().equity)
+        # Paper account shows Alpaca's $100k default — size risk off the
+        # simulated stake instead, same as engine.py does for swing trades.
+        if settings.live_trading:
+            self.equity = float(self.trading.get_account().equity)
+        else:
+            self.equity = settings.starting_equity
         self.states: Dict[str, ORBState] = {}
         journal.init()
         self._init_daily()
@@ -177,13 +182,14 @@ class IntradayEngine:
             return
 
         today = date.today()
-        start = datetime(today.year, today.month, today.day, 9, 25, tzinfo=ET)
+        open_dt = datetime(today.year, today.month, today.day, 9, 30, tzinfo=ET)
         end = datetime(today.year, today.month, today.day, 9, 41, tzinfo=ET)
+        open_ts = pd.Timestamp(open_dt)
 
         req = StockBarsRequest(
             symbol_or_symbols=pending,
             timeframe=TimeFrame(ORB_WINDOW_MINUTES, TimeFrameUnit.Minute),
-            start=start,
+            start=open_dt,
             end=end,
             feed=DataFeed.IEX,
         )
@@ -196,20 +202,28 @@ class IntradayEngine:
         if bars_df.empty:
             return
 
+        def first_orb_bar(df):
+            # Only the bar stamped exactly 9:30 is the opening range — a thin
+            # stock with no 9:30 IEX trades returns 9:35+ bars first, and
+            # those would set a false range.
+            match = df[df.index == open_ts]
+            return match.iloc[0] if not match.empty else None
+
         if isinstance(bars_df.index, pd.MultiIndex):
             for sym in pending:
                 try:
                     sym_bars = bars_df.xs(sym, level="symbol")
                 except KeyError:
                     continue
-                if sym_bars.empty:
+                first = first_orb_bar(sym_bars)
+                if first is None:
                     continue
-                first = sym_bars.iloc[0]
                 self._set_orb(sym, float(first["high"]), float(first["low"]))
         else:
             # Single symbol
-            first = bars_df.iloc[0]
-            self._set_orb(pending[0], float(first["high"]), float(first["low"]))
+            first = first_orb_bar(bars_df)
+            if first is not None:
+                self._set_orb(pending[0], float(first["high"]), float(first["low"]))
 
     def _set_orb(self, sym: str, high: float, low: float):
         s = self.states[sym]
@@ -222,8 +236,10 @@ class IntradayEngine:
     def _get_prices(self) -> Dict[str, float]:
         symbols = list(self.states.keys())
         try:
+            # Default SIP feed — snapshots are allowed on the free plan;
+            # only recent historical bars require IEX.
             snaps = self.data.get_stock_snapshot(
-                StockSnapshotRequest(symbol_or_symbols=symbols, feed=DataFeed.IEX)
+                StockSnapshotRequest(symbol_or_symbols=symbols)
             )
             return {sym: float(snap.latest_trade.price)
                     for sym, snap in snaps.items()
@@ -242,20 +258,34 @@ class IntradayEngine:
             self.trading.cancel_order_by_id(order_id)
         except Exception:
             pass
+        # Shares stay held until the cancel is processed — a replacement stop
+        # submitted too early is rejected, leaving the position unprotected.
+        for _ in range(10):
+            try:
+                status = str(self.trading.get_order_by_id(order_id).status).lower()
+            except Exception:
+                return
+            if any(t in status for t in ("canceled", "filled", "expired", "rejected")):
+                return
+            time.sleep(1)
 
-    def _submit_stop(self, sym: str, qty: int, stop_price: float) -> str:
-        try:
-            order = self.trading.submit_order(StopOrderRequest(
-                symbol=sym,
-                qty=qty,
-                side=OrderSide.SELL,
-                time_in_force=TimeInForce.DAY,
-                stop_price=round(stop_price, 2),
-            ))
-            return str(order.id)
-        except Exception as e:
-            print(f"  stop order failed {sym}: {e}")
-            return ""
+    def _submit_stop(self, sym: str, qty: int, stop_price: float,
+                     attempts: int = 3) -> str:
+        for i in range(attempts):
+            try:
+                order = self.trading.submit_order(StopOrderRequest(
+                    symbol=sym,
+                    qty=qty,
+                    side=OrderSide.SELL,
+                    time_in_force=TimeInForce.DAY,
+                    stop_price=round(stop_price, 2),
+                ))
+                return str(order.id)
+            except Exception as e:
+                print(f"  stop order failed {sym} "
+                      f"(attempt {i + 1}/{attempts}): {e}")
+                time.sleep(2)
+        return ""
 
     # ---- trade lifecycle ----
 
@@ -296,6 +326,20 @@ class IntradayEngine:
 
         # Submit protective stop immediately
         stop_id = self._submit_stop(sym, qty, stop)
+        if not stop_id:
+            # Never hold an unprotected position — bail out at market
+            print(f"  ABORT {sym}: stop could not be placed, closing entry")
+            try:
+                self.trading.submit_order(MarketOrderRequest(
+                    symbol=sym, qty=qty,
+                    side=OrderSide.SELL,
+                    time_in_force=TimeInForce.DAY,
+                ))
+            except Exception as e:
+                print(f"  EMERGENCY: close also failed {sym}: {e} — "
+                      f"manual intervention needed")
+            s.closed = True
+            return False
 
         s.in_trade = True
         s.qty_total = qty
@@ -323,6 +367,10 @@ class IntradayEngine:
         # Scale out at 2:1
         if not s.half_exited and price >= s.target_price:
             half = s.qty_total // 2
+            if half < 1:
+                # Too small to scale — take the full target
+                self._close_position(sym, price, "target")
+                return
             if half >= 1:
                 self._cancel_stop(s)
                 try:
@@ -342,6 +390,9 @@ class IntradayEngine:
                         s.stop_order_id = self._submit_stop(
                             sym, s.qty_remaining, s.entry_price
                         )
+                        if not s.stop_order_id:
+                            self._close_position(sym, price, "stop_failed")
+                            return
                         s.stop_price = s.entry_price
                         print(f"  STOP → breakeven {sym}: {s.entry_price:.2f}")
                     else:
@@ -360,6 +411,9 @@ class IntradayEngine:
                     s.stop_order_id = self._submit_stop(
                         sym, s.qty_remaining, trail
                     )
+                    if not s.stop_order_id:
+                        self._close_position(sym, price, "stop_failed")
+                        return
                     s.stop_price = round(trail, 2)
                     print(f"  TRAIL {sym}: stop → {s.stop_price:.2f}")
 
@@ -451,11 +505,18 @@ class IntradayEngine:
                 self._eod_close_all(prices)
                 break
 
-            # Establish ORB after first 5-min candle closes (9:35)
-            if self._past(9, 35) and not orb_logged:
-                print(f"\n--- Establishing opening ranges ({now.strftime('%H:%M')} ET) ---")
+            # Establish ORB after first 5-min candle closes (9:35).
+            # The 9:30 bar may not be published at exactly 9:35:00, so keep
+            # retrying every loop until all ranges are set (or entries are
+            # cut off and it no longer matters).
+            if (self._past(9, 35)
+                    and not self._past(*ENTRY_CUTOFF)
+                    and any(not s.orb_established and not s.closed
+                            for s in self.states.values())):
+                if not orb_logged:
+                    print(f"\n--- Establishing opening ranges ({now.strftime('%H:%M')} ET) ---")
+                    orb_logged = True
                 self._establish_orb()
-                orb_logged = True
 
             prices = self._get_prices()
 

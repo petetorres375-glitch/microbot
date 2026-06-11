@@ -20,7 +20,6 @@ from typing import Dict, List, Optional
 from zoneinfo import ZoneInfo
 
 import yfinance as yf
-from alpaca.data.enums import DataFeed
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockSnapshotRequest
 
@@ -62,8 +61,12 @@ def _batch_snapshots(symbols: List[str]) -> Dict:
     for i in range(0, len(symbols), 100):
         chunk = symbols[i:i + 100]
         try:
+            # Default SIP feed: snapshots are allowed on the free plan (only
+            # recent historical bars are restricted), and daily_bar.volume must
+            # be consolidated volume — IEX-only volume reads ~50x low against
+            # the consolidated average used in _rel_volume.
             snaps = client.get_stock_snapshot(
-                StockSnapshotRequest(symbol_or_symbols=chunk, feed=DataFeed.IEX)
+                StockSnapshotRequest(symbol_or_symbols=chunk)
             )
             result.update(snaps)
         except Exception:
