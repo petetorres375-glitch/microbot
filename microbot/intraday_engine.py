@@ -65,6 +65,7 @@ class ORBState:
     qty_remaining: int = 0
     entry_price: float = 0.0
     stop_price: float = 0.0
+    initial_risk: float = 0.0   # entry - original stop; stop_price mutates as we trail
     target_price: float = 0.0
     half_exited: bool = False
     highest_price: float = 0.0
@@ -346,6 +347,7 @@ class IntradayEngine:
         s.qty_remaining = qty
         s.entry_price = fill
         s.stop_price = stop
+        s.initial_risk = fill - stop
         s.target_price = target
         s.highest_price = fill
         s.stop_order_id = stop_id
@@ -386,24 +388,30 @@ class IntradayEngine:
                           f"(2:1 = {s.target_price:.2f})")
 
                     if s.qty_remaining >= 1:
-                        # Move stop to breakeven
+                        # Move stop to breakeven — but never below a level the
+                        # pre-scale-out trail already reached
+                        new_stop = max(s.entry_price, s.stop_price)
                         s.stop_order_id = self._submit_stop(
-                            sym, s.qty_remaining, s.entry_price
+                            sym, s.qty_remaining, new_stop
                         )
                         if not s.stop_order_id:
                             self._close_position(sym, price, "stop_failed")
                             return
-                        s.stop_price = s.entry_price
-                        print(f"  STOP → breakeven {sym}: {s.entry_price:.2f}")
+                        s.stop_price = new_stop
+                        print(f"  STOP → breakeven {sym}: {new_stop:.2f}")
                     else:
                         self._finalize(sym, price, "target")
                 except Exception as e:
                     print(f"  scale-out failed {sym}: {e}")
             return
 
-        # Trail after scale-out: stop = entry + 50% of max gain
-        if s.half_exited and s.qty_remaining >= 1:
-            gain = s.highest_price - s.entry_price
+        # Trail: stop = entry + 50% of max gain. Arms after the scale-out, OR
+        # as soon as the position is up 1R — so a runner that stalls just
+        # under the 2:1 target (UBXG 2026-06-12: +1.7R high, never scaled)
+        # gives back half its max gain at worst, not the full original risk.
+        gain = s.highest_price - s.entry_price
+        armed = s.half_exited or (s.initial_risk > 0 and gain >= s.initial_risk)
+        if armed and s.qty_remaining >= 1:
             if gain > 0:
                 trail = s.entry_price + 0.5 * gain
                 if trail > s.stop_price + 0.05:
