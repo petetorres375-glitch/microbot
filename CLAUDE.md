@@ -40,6 +40,9 @@ The bot's job is to:
 | `dividend_momentum` | Slow EMA (50/100), relaxed ADX, RSI < 65 | Low-beta dividend payers |
 | `ema_pullback` | Triple EMA alignment (21>50>150) + pullback on low volume | Stage 2 uptrend setups |
 | `breakout_52w` | 200-day high + 1.5x volume | Institutional-grade breakouts |
+| `rsi2_reversion` | Connors RSI(2) ≤ 10 above 200 SMA, 1:1 RR off 3x ATR stop | High win-rate dips in liquid uptrends |
+
+`rsi2_reversion` keeps its own 1:1 / 3x ATR bracket (validated 2026-06-12: 532 trades, 60% WR, +0.186R over 3.5y) — the builders deliberately do not pass the global `rr` to it. A Minervini-style VCP breakout was tested the same day and rejected (7 trades in 3.5y, all losers). `LOOKBACK_DAYS` was raised 400 → 1100 because 200-bar-warmup strategies could never accumulate the 8 backtest trades needed for a screener score; full research scans take noticeably longer as a result.
 
 ## Scheduled CCR routines
 

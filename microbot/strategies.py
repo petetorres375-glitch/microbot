@@ -296,6 +296,55 @@ class Breakout52w(Strategy):
         return None
 
 
+class RSI2Reversion(Strategy):
+    """
+    Larry Connors' RSI(2) pullback — one of the most replicated documented
+    edges in US equities (Connors & Alvarez, "Short Term Trading Strategies
+    That Work").
+
+    Buy an extreme short-term oversold reading (RSI(2) <= 10) only while the
+    stock is above its 200-day SMA, and only when price is stretched below its
+    5-day SMA (confirms the dip is acute, not a slow rollover). High win-rate,
+    short-hold profile — complements MeanReversion, which uses RSI(14) + BB
+    and fires far less often.
+
+    Defaults are 1:1 reward:risk off a 3x ATR stop — validated 2026-06-12 over
+    3.5y/49 symbols: 532 trades, 60% WR, +0.186R expectancy, PF 1.28. The
+    standard 2:1/1.5x bracket tested at only +0.063R (mean reversion wants a
+    wide stop and a near target, the opposite of a trend bracket).
+    """
+    name = "rsi2_reversion"
+
+    def __init__(self, rsi_period=2, rsi_buy=10, trend_ma=200, stretch_ma=5, **kw):
+        kw.setdefault("rr", 1.0)
+        kw.setdefault("stop_mult", 3.0)
+        super().__init__(**kw)
+        self.rsi_period, self.rsi_buy = rsi_period, rsi_buy
+        self.trend_ma, self.stretch_ma = trend_ma, stretch_ma
+
+    def min_bars(self):
+        return self.trend_ma + self.atr_period + 5
+
+    def evaluate(self, symbol, df):
+        if len(df) < self.min_bars():
+            return None
+        close = df["close"]
+        rsi_fast = ind.rsi(close, self.rsi_period)
+        long_trend = ind.sma(close, self.trend_ma)
+        short_ma = ind.sma(close, self.stretch_ma)
+        a = ind.atr(df, self.atr_period).iloc[-1]
+
+        uptrend = close.iloc[-1] > long_trend.iloc[-1]
+        oversold = rsi_fast.iloc[-1] <= self.rsi_buy
+        stretched = close.iloc[-1] < short_ma.iloc[-1]
+        if uptrend and oversold and stretched:
+            why = (f"RSI({self.rsi_period})={rsi_fast.iloc[-1]:.0f}, "
+                   f"below MA{self.stretch_ma}, > MA{self.trend_ma}")
+            return _bracket(symbol, self.name, close.iloc[-1], a,
+                            self.stop_mult, self.rr, why)
+        return None
+
+
 # Registry so config / dashboard can reference strategies by name.
 ALL_STRATEGIES = {
     TrendMomentum.name: TrendMomentum,
@@ -304,6 +353,7 @@ ALL_STRATEGIES = {
     DividendMomentum.name: DividendMomentum,
     EMAPullback.name: EMAPullback,
     Breakout52w.name: Breakout52w,
+    RSI2Reversion.name: RSI2Reversion,
 }
 
 
@@ -314,6 +364,7 @@ def build_default_strategies(rr: float = 2.0):
         Breakout(rr=rr),
         EMAPullback(rr=rr),
         Breakout52w(rr=rr),
+        RSI2Reversion(),  # keeps its own validated 1:1 / 3x ATR bracket — do not pass rr
     ]
 
 
@@ -340,4 +391,5 @@ def build_strategies_from_params(active: dict, rr: float = 2.0,
         _make(Breakout),
         _make(EMAPullback),
         _make(Breakout52w),
+        RSI2Reversion(**active.get(RSI2Reversion.name, {})),  # own rr — see class docstring
     ]

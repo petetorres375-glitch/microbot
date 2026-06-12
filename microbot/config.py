@@ -89,7 +89,11 @@ class Settings:
 
     # --- Data / scheduling ---
     bar_timeframe: str = os.getenv("BAR_TIMEFRAME", "1Day")   # "1Day" swing, "15Min" intraday
-    lookback_days: int = int(os.getenv("LOOKBACK_DAYS", "400"))
+    # 1100 calendar days ≈ 750 trading bars. Strategies with 200-bar warmups
+    # (mean_reversion, rsi2_reversion) need this much history to accumulate the
+    # 8 backtest trades required for a screener score; at 400 days they could
+    # never qualify.
+    lookback_days: int = int(os.getenv("LOOKBACK_DAYS", "1100"))
 
     # --- Google Sheets (optional) ---
     gsheet_id: str = os.getenv("GSHEET_ID", "")
