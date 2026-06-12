@@ -39,6 +39,7 @@
     "GOOG": "CLEAN",
     "SHOP": "CAUTION",
     "GLD": "AVOID",
-    "NOK": "CLEAN"
+    "NOK": "CLEAN",
+    "SPCX": "CLEAN"
   }
 }
