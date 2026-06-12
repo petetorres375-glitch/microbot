@@ -143,6 +143,13 @@ A bracket order submits three legs in one request: entry, stop-loss, and take-pr
 
 Bracket orders use `TimeInForce.GTC` (not DAY) so stop and take-profit legs survive overnight. A prior bug used DAY, which canceled all legs at market close and left positions unprotected — fixed 2026-06-03 (commit 8506ef4).
 
+## Trailing stops (both layers)
+
+Added 2026-06-12 after UBXG rode a +1.7R open gain back toward its original stop:
+
+- **Intraday (ORB):** the 50%-of-max-gain trail arms once the position is up 1R (previously only after the 2:1 half scale-out). The scale-out's breakeven move is clamped so it never lowers an already-trailed stop.
+- **Swing (`microbot/trail.py`):** daily ratchet at each engine run — any position up ≥ 1R gets its live stop order raised to entry + 50% of the gain. Ratchet-only, never lowered; the 2:1 target leg stays. Original risk comes from the journal's order record, and the journal stop is deliberately not updated so dashboard R-multiples keep the original-risk denominator. Runs before the research scan so position protection never waits on it.
+
 ## After-hours order management
 
 Alpaca only allows one sell order per position at a time (shares are "held" for the order). To have both a stop-loss and a take-profit live simultaneously, use **OCO (One Cancels Other)** orders via `LimitOrderRequest` with `order_class=OrderClass.OCO`, `take_profit=TakeProfitRequest(limit_price=...)`, and `stop_loss=StopLossRequest(stop_price=...)`. When one leg fills, the other is automatically canceled.
@@ -169,6 +176,7 @@ The bot uses bracket orders (entry + stop + take-profit in one atomic order). Al
 | `microbot/journal.py` | SQLite trade journal |
 | `microbot/approvals.py` | Human approval gate |
 | `microbot/splits.py` | Corporate action / split handling |
+| `microbot/trail.py` | Daily 1R stop ratchet for swing positions |
 | `microbot/reconcile.py` | Closes open journal orders by checking Alpaca bracket legs |
 | `microbot/diagnostics.py` | Lightweight pre-engine health check (credentials, Alpaca, verdicts, DB, imports) |
 | `microbot/premarket_check.py` | Full pre-market audit (adds stop order audit, git check, position R display) |

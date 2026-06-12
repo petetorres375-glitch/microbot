@@ -24,6 +24,7 @@ from . import journal
 from . import feedback
 from . import notify
 from . import splits
+from . import trail
 from . import verdicts as verdicts_mod
 from . import diagnostics
 from .risk import RiskConfig, size_trade
@@ -76,6 +77,14 @@ def run_once(research_only: bool = False, push_sheets: bool = False):
     acct = broker.account()
     mode = "LIVE" if not broker.paper else "PAPER"
     print(f"[{mode}] equity=${acct['equity']:.2f} buying_power=${acct['buying_power']:.2f}")
+
+    # Daily stop ratchet: positions up >= 1R get their stop raised to lock in
+    # half the gain. Runs before the (slow) research scan so protection of
+    # open positions never waits on it.
+    trailed = trail.trail_swing_stops(broker)
+    if trailed:
+        notify.notify("microbot: trailed stops on "
+                      + ", ".join(f"{t['symbol']} → {t['new_stop']}" for t in trailed))
 
     # Load any approved parameter improvements from the DB.
     active_params = journal.fetch_active_params()
