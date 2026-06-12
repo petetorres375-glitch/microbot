@@ -29,6 +29,11 @@ class FeedbackConfig:
 def compute_vetoes(cfg: FeedbackConfig = FeedbackConfig()) -> dict:
     """Return {'setups': set, 'symbols': set, 'combos': set, 'table': df}."""
     df = analyzer.frame()
+    if not df.empty:
+        # Zero-P&L rows are reconciliation artifacts (no_fill, manual closes at
+        # entry price) — not real outcomes. Counting them inflates the sample
+        # past min_trades and lets 2-3 real trades trigger a veto.
+        df = df[df["pnl"] != 0]
     if df.empty:
         return {"setups": set(), "symbols": set(), "combos": set(),
                 "table": pd.DataFrame()}
