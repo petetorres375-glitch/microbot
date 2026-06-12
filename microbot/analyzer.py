@@ -31,9 +31,18 @@ from . import journal, metrics
 # ----------------------------------------------------------------------
 def frame(df: Optional[pd.DataFrame] = None) -> pd.DataFrame:
     """Load closed trades from the journal (or use a supplied df) and add
-    derived columns: timestamp, hour, win."""
+    derived columns: timestamp, hour, win.
+
+    Zero-P&L rows are dropped: they are reconciliation artifacts (no_fill,
+    manual closes at the entry price), not trade outcomes. Counting them
+    deflates expectancy and inflates sample sizes everywhere downstream —
+    the report, the dashboard, and the feedback veto loop all see only
+    real fills."""
     if df is None:
         df = pd.DataFrame(journal.fetch_trades())
+    if df.empty:
+        return df
+    df = df[df["pnl"] != 0]
     if df.empty:
         return df
     df = df.copy()

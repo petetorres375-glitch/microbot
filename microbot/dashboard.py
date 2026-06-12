@@ -72,7 +72,9 @@ st.caption(f"Mode: {'LIVE' if settings.live_trading else 'PAPER'}  ·  "
            f"Reward:Risk {settings.reward_risk_ratio:.0f}:1")
 
 # ---------------- PERFORMANCE ----------------
-trades = journal.fetch_trades()
+# Zero-P&L rows are reconciliation artifacts, not outcomes — same filter as
+# analyzer.frame(), so the dashboard agrees with the report and the veto loop.
+trades = [t for t in journal.fetch_trades() if t["pnl"]]
 trades_df = pd.DataFrame(trades)
 m = metrics.compute(trades)
 
