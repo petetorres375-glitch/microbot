@@ -16,20 +16,44 @@ Sheets Health column keeps the original-risk denominator for its R-multiples.
 """
 from __future__ import annotations
 
-from typing import List, Dict
+from datetime import date
+from typing import List, Dict, Optional
 
+from alpaca.data.historical import StockHistoricalDataClient
+from alpaca.data.requests import StockLatestTradeRequest
 from alpaca.trading.enums import OrderSide, OrderType
 from alpaca.trading.requests import ReplaceOrderRequest
 
 from . import journal
+from .config import settings
 
 
-def trail_swing_stops(broker) -> List[Dict]:
+def _verified_price(data_client, symbol: str) -> Optional[float]:
+    """Latest trade price, only if it's a real print: size > 0 and stamped
+    today. Filters reference/ghost quotes (e.g. an IPO's indicative print with
+    size 0), which would otherwise compute a bogus trail level."""
+    try:
+        t = data_client.get_stock_latest_trade(
+            StockLatestTradeRequest(symbol_or_symbols=symbol))[symbol]
+    except Exception:
+        return None
+    if not t or float(t.size or 0) <= 0:
+        return None
+    if t.timestamp.date() != date.today():
+        return None
+    return float(t.price)
+
+
+def trail_swing_stops(broker, data_client=None) -> List[Dict]:
     """Raise stops on positions up >= 1R. Returns a list of adjustments made."""
     adjusted: List[Dict] = []
     positions = broker.positions()
     if not positions:
         return adjusted
+
+    if data_client is None:
+        data_client = StockHistoricalDataClient(
+            settings.api_key, settings.api_secret)
 
     # Original entry/stop per symbol from the journal (latest open row wins).
     basis = {r["symbol"]: r for r in journal.fetch_open_orders()}
@@ -50,8 +74,11 @@ def trail_swing_stops(broker) -> List[Dict]:
         sym = p["symbol"]
         rec = basis.get(sym)
         leg = stop_legs.get(sym)
-        price = p["current_price"]
-        if rec is None or leg is None or price <= 0:
+        if rec is None or leg is None:
+            continue
+        price = _verified_price(data_client, sym)
+        if price is None:
+            print(f"  trail: no verified trade for {sym} today — skipped")
             continue
 
         entry = float(rec["entry"])
@@ -75,3 +102,20 @@ def trail_swing_stops(broker) -> List[Dict]:
         except Exception as e:
             print(f"  trail failed {sym}: {e}")
     return adjusted
+
+
+def main():
+    """Standalone runner for the hourly market-hours cron. The today's-trade
+    guard in _verified_price makes off-hours/holiday runs a clean no-op."""
+    from datetime import datetime
+    from .broker import Broker
+
+    journal.init()
+    print(f"[{datetime.now():%Y-%m-%d %H:%M}] trail check")
+    adjusted = trail_swing_stops(Broker())
+    if not adjusted:
+        print("  no adjustments")
+
+
+if __name__ == "__main__":
+    main()

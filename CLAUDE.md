@@ -65,6 +65,7 @@ CCR routines handle analysis and research. **Execution (actual order placement) 
 SHELL=/bin/bash
 35 9 * * 1-5 cd /home/lenovo-home/microbot && git pull --quiet && source .venv/bin/activate && python -m microbot.engine >> /home/lenovo-home/microbot/engine.log 2>&1
 34 9 * * 1-5 cd /home/lenovo-home/microbot && git pull --quiet && source .venv/bin/activate && python run_intraday.py >> /home/lenovo-home/microbot/intraday.log 2>&1
+30 10-15 * * 1-5 cd /home/lenovo-home/microbot && source .venv/bin/activate && python -m microbot.trail >> /home/lenovo-home/microbot/trail.log 2>&1
 ```
 
 **Important:** `SHELL=/bin/bash` is required — cron defaults to `/bin/sh` (dash on Ubuntu) which does not support `source`. Without it, both jobs silently fail at the activate step and never run.
@@ -148,7 +149,7 @@ Bracket orders use `TimeInForce.GTC` (not DAY) so stop and take-profit legs surv
 Added 2026-06-12 after UBXG rode a +1.7R open gain back toward its original stop:
 
 - **Intraday (ORB):** the 50%-of-max-gain trail arms once the position is up 1R (previously only after the 2:1 half scale-out). The scale-out's breakeven move is clamped so it never lowers an already-trailed stop.
-- **Swing (`microbot/trail.py`):** daily ratchet at each engine run — any position up ≥ 1R gets its live stop order raised to entry + 50% of the gain. Ratchet-only, never lowered; the 2:1 target leg stays. Original risk comes from the journal's order record, and the journal stop is deliberately not updated so dashboard R-multiples keep the original-risk denominator. Runs before the research scan so position protection never waits on it.
+- **Swing (`microbot/trail.py`):** ratchet at each engine run plus an hourly market-hours cron (10:30–3:30 ET) — any position up ≥ 1R gets its live stop order raised to entry + 50% of the gain. Ratchet-only, never lowered; the 2:1 target leg stays. Original risk comes from the journal's order record, and the journal stop is deliberately not updated so dashboard R-multiples keep the original-risk denominator. Prices are verified against the latest real trade print (size > 0, stamped today) before any math — ghost/reference quotes (SPCX IPO day) are skipped, which also makes holiday runs a clean no-op. Unit tests in `tests/test_trail.py`.
 
 ## After-hours order management
 
