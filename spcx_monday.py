@@ -26,8 +26,8 @@ def remove_self_from_cron():
 
 def main():
     today = date.today().isoformat()
-    if today != "2026-06-16":
-        print(f"spcx_monday: skipping, today is {today} not 2026-06-16")
+    if today != "2026-06-15":
+        print(f"spcx_monday: skipping, today is {today} not 2026-06-15")
         remove_self_from_cron()
         return
 
@@ -38,7 +38,7 @@ def main():
         from alpaca.data.historical import StockHistoricalDataClient
         from alpaca.data.requests import StockLatestTradeRequest
         from microbot.config import settings
-        data_client = StockHistoricalDataClient(settings.alpaca_api_key, settings.alpaca_api_secret)
+        data_client = StockHistoricalDataClient(settings.api_key, settings.api_secret)
         trade = data_client.get_stock_latest_trade(StockLatestTradeRequest(symbol_or_symbols=SYMBOL))[SYMBOL]
         price = float(trade.price)
         print(f"spcx_monday: {SYMBOL} latest trade ${price:.2f}")
@@ -72,8 +72,6 @@ def main():
         notify.notify(msg)
 
         journal.init()
-        journal.log_signal(SYMBOL, "ipo_manual", QTY, ENTRY_LIMIT, STOP, TARGET,
-                           f"SPCX day-2 re-entry, limit ${ENTRY_LIMIT}", score=0.0)
     except Exception as e:
         msg = f"spcx_monday: order failed — {e}"
         print(msg)
