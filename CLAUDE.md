@@ -151,7 +151,7 @@ Bracket orders use `TimeInForce.GTC` (not DAY) so stop and take-profit legs surv
 Added 2026-06-12 after UBXG rode a +1.7R open gain back toward its original stop:
 
 - **Intraday (ORB):** the 50%-of-max-gain trail arms once the position is up 1R (previously only after the 2:1 half scale-out). The scale-out's breakeven move is clamped so it never lowers an already-trailed stop.
-- **Swing (`microbot/trail.py`):** ratchet at each engine run plus an hourly market-hours cron (10:30–3:30 ET) — any position up ≥ 1R gets its live stop order raised to entry + 50% of the gain. Ratchet-only, never lowered; the 2:1 target leg stays. Original risk comes from the journal's order record, and the journal stop is deliberately not updated so dashboard R-multiples keep the original-risk denominator. Prices are verified against the latest real trade print (size > 0, stamped today) before any math — ghost/reference quotes (SPCX IPO day) are skipped, which also makes holiday runs a clean no-op. Unit tests in `tests/test_trail.py`.
+- **Swing (`microbot/trail.py`):** ratchet at each engine run plus a market-hours cron (9:36 AM, 10:30–3:30 ET hourly, 4:00 PM) — any position up ≥ 1R gets its live stop order raised to entry + 50% of the gain. Ratchet-only, never lowered; the 2:1 target leg stays. Original risk comes from the journal's order record, and the journal stop is deliberately not updated so dashboard R-multiples keep the original-risk denominator. Prices are verified against the latest real trade print (size > 0, stamped today) before any math — ghost/reference quotes (SPCX IPO day) are skipped, which also makes holiday runs a clean no-op. Unit tests in `tests/test_trail.py`.
 
 ## After-hours order management
 
@@ -261,13 +261,17 @@ Automates portfolio restructuring in one step. Given a `--target` list:
 
 Use `--dry-run` to preview without placing orders. Built 2026-06-04 to reduce manual workflow.
 
-## Current focused universe (as of 2026-06-12)
+## Current focused universe (as of 2026-06-15)
 
-Active portfolio: **BTI**. `MAX_OPEN_POSITIONS=5` — 4 slots open.
+Active portfolio: **BTI, CSCO, F, GOOG, SPCX**. `MAX_OPEN_POSITIONS=5` — full.
 
 | Symbol | Entry | Notes |
 |---|---|---|
-| BTI | $59.82 | British American Tobacco. Dividend momentum setup. 17 shares, +4.1% as of 2026-06-12. |
+| BTI | $59.82 | British American Tobacco. Dividend momentum. 17 shares. Stop $56.98, target $65.52. |
+| CSCO | $121.04 | Cisco. EMA pullback. 7 shares. Stop $113.98, target $133.13. Slightly offside (-0.16R). |
+| F | $15.23 | Ford. EMA pullback. 49 shares. Stop $14.32, target $17.34. At -0.52R. |
+| GOOG | $365.95 | Google. Trend momentum. 6 shares. Stop $350.59, target $399.12. Near breakeven (+0.08R). |
+| SPCX | $172.94 | SpaceX. IPO re-entry 2026-06-15. 2 shares. No target — holding long-term. Stop $183.35 (trailed), ratchets via trail cron. Original stop $150. Journal entry added manually. |
 
 Recently closed: UBXG stopped out 2026-06-12 at $7.75 (+$36.92, ORB intraday). SPCX target hit 2026-06-12 at $165.64 (+$98.98, SpaceX IPO trade, ~1.87R). GOOG stopped out 2026-06-11 at $344.36 (~-1.0R). TGTX hit target +$88.76 (+1.52R) on 2026-06-04. KEEL stopped out -$52.36 (-1.00R) on 2026-06-04. LEGN manual close $0 on 2026-06-04. IREN stopped out 2026-06-04. LUNR stopped out 2026-06-04. VALE stopped out 2026-06-04 at $15.84.
 
