@@ -269,7 +269,7 @@ Active portfolio: **BTI, CSCO, F, GOOG, SPCX**. `MAX_OPEN_POSITIONS=5` — full.
 |---|---|---|
 | BTI | $59.82 | British American Tobacco. Dividend momentum. 17 shares. Stop $56.98, target $65.52. |
 | CSCO | $121.04 | Cisco. EMA pullback. 7 shares. Stop $113.98, target $133.13. Slightly offside (-0.16R). |
-| F | $15.23 | Ford. EMA pullback. 49 shares. Stop $14.32, target $17.34. At -0.52R. |
+| F | $15.23 | Ford. EMA pullback. 49 shares. Exiting — one-shot cron fires 9:31 AM ET 2026-06-16, market sell. Bracket stuck PENDING_CANCEL after-hours; no active stop overnight. |
 | GOOG | $365.95 | Google. Trend momentum. 6 shares. Stop $350.59, target $399.12. Near breakeven (+0.08R). |
 | SPCX | $172.94 | SpaceX. IPO re-entry 2026-06-15. 2 shares. No target — holding long-term. Stop $183.35 (trailed), ratchets via trail cron. Original stop $150. Journal entry added manually. |
 
