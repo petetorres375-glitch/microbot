@@ -263,7 +263,7 @@ Use `--dry-run` to preview without placing orders. Built 2026-06-04 to reduce ma
 
 ## Current focused universe (as of 2026-06-16)
 
-Active portfolio: **BTI, CSCO, GOOG**. `MAX_OPEN_POSITIONS=5` — 3/5, 2 slots open.
+Active portfolio: **BTI, CSCO, GOOG**. `MAX_OPEN_POSITIONS=5` — 3/5, 2 slots open. SPCX re-entry planned 2026-06-17 (stopped out 2026-06-16, long-term hold thesis intact).
 
 | Symbol | Entry | Notes |
 |---|---|---|
