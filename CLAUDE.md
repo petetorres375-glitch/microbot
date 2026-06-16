@@ -263,7 +263,7 @@ Use `--dry-run` to preview without placing orders. Built 2026-06-04 to reduce ma
 
 ## Current focused universe (as of 2026-06-16)
 
-Active portfolio: **BTI, CSCO, GOOG**. `MAX_OPEN_POSITIONS=5` — 3/5, 2 slots open. SPCX re-entry planned 2026-06-17: 2 shares, stop $190 (trailing), no target, long-term hold. Manual entry at open — poll for real print (size > 0), place GTC stop order at $190, add journal entry manually (entry price + stop $190 so trail cron can ratchet). Trail cron ratchets once up ≥ 1R.
+Active portfolio: **BTI, CSCO, GOOG**. `MAX_OPEN_POSITIONS=5` — 3/5, 2 slots open. SPCX re-entry planned 2026-06-17: 2 shares, stop $190 (trailing), no target, long-term hold. SPCX closed 2026-06-16 at $201.80 (risk/share $11.80, 2-share risk $23.60 — plan unchanged). Manual entry at open — poll for real print (size > 0), place GTC stop order at $190, add journal entry manually (entry price + stop $190 so trail cron can ratchet). Trail cron ratchets once up ≥ 1R.
 
 | Symbol | Entry | Notes |
 |---|---|---|
