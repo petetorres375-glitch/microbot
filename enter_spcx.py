@@ -116,7 +116,7 @@ def main():
     print(f"  Journal: {SYMBOL} {QTY}sh @ ${fill:.2f}  stop=${STOP:.2f}  risk=${risk:.2f}")
 
     # Self-remove from crontab now that the job is done.
-    import subprocess
+    import subprocess, re, pathlib
     result = subprocess.run(["crontab", "-l"], capture_output=True, text=True)
     new_crontab = "\n".join(
         line for line in result.stdout.splitlines()
@@ -124,6 +124,38 @@ def main():
     ) + "\n"
     subprocess.run(["crontab", "-"], input=new_crontab, text=True)
     print("  Cron entry removed.")
+
+    # Clean up CLAUDE.md: remove the enter_spcx cron line + its explanatory note,
+    # and replace the "re-entry planned" paragraph with a simple "entered" line.
+    claude_md = pathlib.Path(__file__).parent / "CLAUDE.md"
+    text = claude_md.read_text()
+
+    # Remove the one-shot cron line from the crontab block
+    text = re.sub(r"\n31 9 17 6 \* cd .+enter_spcx\.py .+\n", "\n", text)
+    # Remove the explanatory note that follows the crontab block
+    text = re.sub(
+        r"\nThe SPCX entry \(last line\) is a one-shot.+?Remove after 2026-06-17\.\n",
+        "\n", text, flags=re.DOTALL,
+    )
+    # Replace the "re-entry planned" sentence with a simple "entered" record
+    text = re.sub(
+        r"SPCX re-entry planned 2026-06-17:.+?Trail cron ratchets once up ≥ 1R\.",
+        f"SPCX: re-entered 2026-06-17 at ${fill:.2f}, 2 shares, stop $190 (trailing), no target, long-term hold.",
+        text,
+    )
+    claude_md.write_text(text)
+    print("  CLAUDE.md cleaned up.")
+
+    # Commit and push so the repo stays current.
+    repo = pathlib.Path(__file__).parent
+    subprocess.run(["git", "-C", str(repo), "add", "CLAUDE.md"], check=True)
+    subprocess.run(
+        ["git", "-C", str(repo), "commit", "-m",
+         f"CLAUDE.md: SPCX entered 2026-06-17 at ${fill:.2f} — cron note removed"],
+        check=True,
+    )
+    subprocess.run(["git", "-C", str(repo), "push"], check=True)
+    print("  CLAUDE.md committed and pushed.")
     print("Done.")
 
 
