@@ -114,6 +114,16 @@ def main():
     )
     risk = round(QTY * (fill - STOP), 2)
     print(f"  Journal: {SYMBOL} {QTY}sh @ ${fill:.2f}  stop=${STOP:.2f}  risk=${risk:.2f}")
+
+    # Self-remove from crontab now that the job is done.
+    import subprocess
+    result = subprocess.run(["crontab", "-l"], capture_output=True, text=True)
+    new_crontab = "\n".join(
+        line for line in result.stdout.splitlines()
+        if "enter_spcx" not in line
+    ) + "\n"
+    subprocess.run(["crontab", "-"], input=new_crontab, text=True)
+    print("  Cron entry removed.")
     print("Done.")
 
 
