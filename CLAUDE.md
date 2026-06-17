@@ -2,7 +2,9 @@
 
 ## What this project is
 
-A Python paper-trading bot connected to Alpaca's paper API. Starting equity ~$500 (paper account shows $100k Alpaca default). Swing-trading focus, long-only, no day trading.
+A Python paper-trading bot connected to Alpaca's paper API. Starting equity ~$500 (paper account shows $100k Alpaca default). Swing-trading focus, long-only, with a fully automated intraday ORB layer.
+
+**Note (2026-06-17):** Alpaca has eliminated the Pattern Day Trader (PDT) rule and replaced it with an intraday margin framework. There is no longer a $25,000 minimum equity requirement for unlimited day trading. Guardrails are now margin-based (intraday buying power), not trade-count based. The deprecated API fields `pattern_day_trader`, `daytrade_count`, `last_daytrade_count`, `daytrading_buying_power`, `last_daytrading_buying_power` are removed as of July 6, 2026 — use `buying_power` instead. These fields do not appear in this codebase.
 
 ## Key design principle
 
