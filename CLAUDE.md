@@ -68,10 +68,7 @@ SHELL=/bin/bash
 36 9 * * 1-5 cd /home/lenovo-home/microbot && source .venv/bin/activate && python -m microbot.trail >> /home/lenovo-home/microbot/trail.log 2>&1
 30 10-15 * * 1-5 cd /home/lenovo-home/microbot && source .venv/bin/activate && python -m microbot.trail >> /home/lenovo-home/microbot/trail.log 2>&1
 0 16 * * 1-5 cd /home/lenovo-home/microbot && source .venv/bin/activate && python -m microbot.trail >> /home/lenovo-home/microbot/trail.log 2>&1
-31 9 17 6 * cd /home/lenovo-home/microbot && source .venv/bin/activate && python enter_spcx.py >> /home/lenovo-home/microbot/enter_spcx.log 2>&1
 ```
-
-The SPCX entry (last line) is a one-shot for 2026-06-17: polls for a real print, buys 2 shares at market, places a GTC stop at $190, logs to journal. Has a date guard and position guard so it's a no-op if it ever fires again. Remove after 2026-06-17.
 
 **Important:** `SHELL=/bin/bash` is required — cron defaults to `/bin/sh` (dash on Ubuntu) which does not support `source`. Without it, both jobs silently fail at the activate step and never run.
 
@@ -266,7 +263,7 @@ Use `--dry-run` to preview without placing orders. Built 2026-06-04 to reduce ma
 
 ## Current focused universe (as of 2026-06-16)
 
-Active portfolio: **BTI, CSCO, GOOG**. `MAX_OPEN_POSITIONS=5` — 3/5, 2 slots open. SPCX re-entry planned 2026-06-17: 2 shares, stop $190 (trailing), no target, long-term hold. SPCX closed 2026-06-16 at $201.80 (risk/share $11.80, 2-share risk $23.60). Automated via `enter_spcx.py` cron at 9:31 AM ET — polls for real print, buys 2sh at market, places GTC stop $190, journals for trail cron. Trail cron ratchets once up ≥ 1R.
+Active portfolio: **BTI, CSCO, GOOG, SPCX**. `MAX_OPEN_POSITIONS=5` — 4/5, 1 slot open. SPCX: re-entered 2026-06-17 at $208.825, 2 shares, stop $190.00 (trailing), no target, long-term hold. Risk/share $18.825, 2-share risk $37.65. Trail cron ratchets once up ≥ 1R.
 
 | Symbol | Entry | Notes |
 |---|---|---|
