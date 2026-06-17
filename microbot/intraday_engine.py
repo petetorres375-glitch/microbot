@@ -405,15 +405,16 @@ class IntradayEngine:
                     print(f"  scale-out failed {sym}: {e}")
             return
 
-        # Trail: stop = entry + 50% of max gain. Arms after the scale-out, OR
+        # Trail: stop = entry + 25% of max gain. Arms after the scale-out, OR
         # as soon as the position is up 1R — so a runner that stalls just
         # under the 2:1 target (UBXG 2026-06-12: +1.7R high, never scaled)
-        # gives back half its max gain at worst, not the full original risk.
+        # gives back 75% of max gain at worst, not the full original risk.
+        # 25% (down from 50%) keeps us in longer on volatile gap stocks (ICCM 2026-06-17).
         gain = s.highest_price - s.entry_price
         armed = s.half_exited or (s.initial_risk > 0 and gain >= s.initial_risk)
         if armed and s.qty_remaining >= 1:
             if gain > 0:
-                trail = s.entry_price + 0.5 * gain
+                trail = s.entry_price + 0.25 * gain
                 if trail > s.stop_price + 0.05:
                     self._cancel_stop(s)
                     s.stop_order_id = self._submit_stop(

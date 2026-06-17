@@ -74,23 +74,27 @@ def _batch_snapshots(symbols: List[str]) -> Dict:
     return result
 
 
-def _rel_volume(symbol: str, current_volume: float) -> float:
+def _rel_volume(symbol: str, _current_volume: float) -> float:
     """Pace-adjusted relative volume: today's per-minute rate vs. historical average.
 
-    Comparing raw cumulative volume to a full-day average is meaningless at open —
-    only 5 minutes of volume can't equal a full day. Instead measure trading *pace*:
-    (today's volume / elapsed minutes) / (avg_daily / 390 trading minutes).
-    A value of 2.0 means the stock is trading at 2x its normal per-minute rate.
+    Both volumes come from yfinance (consolidated) to avoid the ~50x undercount
+    from Alpaca's IEX-only daily_bar.volume vs. yfinance's consolidated average.
     """
     try:
         now_et = datetime.datetime.now(ZoneInfo("America/New_York"))
         market_open = now_et.replace(hour=9, minute=30, second=0, microsecond=0)
         elapsed_minutes = max(1.0, (now_et - market_open).total_seconds() / 60)
-        avg = yf.Ticker(symbol).fast_info.three_month_average_volume
-        if avg and avg > 0:
-            per_min_today = current_volume / elapsed_minutes
-            per_min_avg = avg / 390
-            return round(per_min_today / per_min_avg, 2)
+        tk = yf.Ticker(symbol)
+        avg = tk.fast_info.three_month_average_volume
+        if not avg or avg <= 0:
+            return 0.0
+        hist = tk.history(period="1d", interval="1m")
+        today_vol = float(hist["Volume"].sum()) if not hist.empty else 0.0
+        if today_vol <= 0:
+            return 0.0
+        per_min_today = today_vol / elapsed_minutes
+        per_min_avg = avg / 390
+        return round(per_min_today / per_min_avg, 2)
     except Exception:
         pass
     return 0.0

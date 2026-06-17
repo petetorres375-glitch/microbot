@@ -150,7 +150,7 @@ Bracket orders use `TimeInForce.GTC` (not DAY) so stop and take-profit legs surv
 
 Added 2026-06-12 after UBXG rode a +1.7R open gain back toward its original stop:
 
-- **Intraday (ORB):** the 50%-of-max-gain trail arms once the position is up 1R (previously only after the 2:1 half scale-out). The scale-out's breakeven move is clamped so it never lowers an already-trailed stop.
+- **Intraday (ORB):** the 25%-of-max-gain trail arms once the position is up 1R (reduced from 50% after ICCM 2026-06-17 showed the tighter trail exits too early on volatile gap stocks). The scale-out's breakeven move is clamped so it never lowers an already-trailed stop.
 - **Swing (`microbot/trail.py`):** ratchet at each engine run plus a market-hours cron (9:36 AM, 10:30–3:30 ET hourly, 4:00 PM) — any position up ≥ 1R gets its live stop order raised to entry + 50% of the gain. Ratchet-only, never lowered; the 2:1 target leg stays. Original risk comes from the journal's order record, and the journal stop is deliberately not updated so dashboard R-multiples keep the original-risk denominator. Prices are verified against the latest real trade print (size > 0, stamped today) before any math — ghost/reference quotes (SPCX IPO day) are skipped, which also makes holiday runs a clean no-op. Unit tests in `tests/test_trail.py`.
 
 ## After-hours order management
@@ -245,7 +245,7 @@ Added 2026-06-04. Fully automated Opening Range Breakout engine that runs alongs
 
 **Risk rules:** 1% equity per trade · max 2 concurrent intraday positions · 2% daily loss limit halts trading · hard EOD close at 3:55 PM ET — never overnight
 
-**Strategy:** 5-minute ORB — entry on break above first 5-min candle high, stop at ORB low, scale out half at 2:1, trail remaining at 50% of max gain above entry
+**Strategy:** 5-minute ORB — entry on break above first 5-min candle high, stop at ORB low, scale out half at 2:1, trail remaining at 25% of max gain above entry
 
 **Automation:** Cron runs `run_intraday.py` at 9:34 AM ET weekdays. Scanner finds gap 5%+ candidates with 2x+ pace-adjusted rel volume (per-minute rate vs. historical average, not raw cumulative). CCR routine (`trig_01TX4CDGSGMLscLLgtkgeKAr`) runs at 9:15 AM ET to print a pre-market news briefing on candidates.
 
