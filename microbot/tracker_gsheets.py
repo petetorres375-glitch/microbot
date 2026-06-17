@@ -20,6 +20,20 @@ from typing import Dict, List
 
 from .config import settings
 
+
+def _spy_benchmark(lookback_days: int = 1100) -> str:
+    """SPY buy-and-hold return over the backtest lookback window."""
+    try:
+        from .data import MarketData
+        df = MarketData().bars("SPY", lookback_days=lookback_days)
+        if df is None or len(df) < 2:
+            return ""
+        ret = (df["close"].iloc[-1] / df["close"].iloc[0] - 1) * 100
+        years = round(len(df) / 252, 1)
+        return f"SPY B&H {years}yr: {ret:+.1f}%"
+    except Exception:
+        return ""
+
 # Per-column header colors (light pastel backgrounds with dark text)
 _COL_COLORS_WL = [
     {"red": 0.68, "green": 0.85, "blue": 0.90},  # Symbol      — light blue
@@ -285,7 +299,7 @@ def _ensure_ws(sh, title: str, headers: List[str]):
         }}]})
     except Exception:
         pass
-    ws.update(values=[[f"microbot  |  Last Updated: {stamp}"] + [""] * (len(headers) - 1)], range_name="A1")
+    ws.update(values=[[f"microbot  |  Last Updated: {stamp}  |  {_spy_benchmark(settings.lookback_days)}"] + [""] * (len(headers) - 1)], range_name="A1")
     ws.update(values=[headers], range_name="A2")
     return ws
 
