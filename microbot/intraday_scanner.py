@@ -36,6 +36,7 @@ INTRADAY_UNIVERSE = [
     "WOLF", "BLNK", "CHPT", "NKLA", "MVST", "BFLY",
     "OPEN", "OPRA", "BARK", "XPEV", "LI", "NIO",
     "QURE",
+    "SPY", "QQQ", "DIA",
 ]
 
 MIN_GAP_PCT = 0.05
