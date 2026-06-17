@@ -30,12 +30,12 @@ from .yahoo_scanner import _get_most_active, _get_trending, _is_valid
 # volatile small/mid caps, Bitcoin miners, EV names, meme stocks, etc.
 INTRADAY_UNIVERSE = [
     "MARA", "RIOT", "CLSK", "COIN", "HOOD", "SOFI", "RIVN",
-    "GME", "AMC", "BBAI", "SOUN", "SPCE", "IONQ", "RKLB", "JOBY",
-    "ACHR", "ASTS", "LUNR", "IREN", "HIMS", "CLOV",
-    "LAZR", "LIDR", "OUST", "AEVA", "PRCT", "RXST",
-    "WOLF", "BLNK", "CHPT", "NKLA", "MVST", "BFLY",
-    "OPEN", "OPRA", "BARK", "XPEV", "LI", "NIO",
-    "QURE",
+    "GME", "SOUN", "IONQ", "RKLB", "JOBY",
+    "ACHR", "ASTS", "LUNR", "IREN", "HIMS",
+    "OUST", "AEVA", "PRCT",
+    "WOLF", "CHPT", "BFLY",
+    "OPRA", "BARK", "XPEV", "LI", "NIO",
+    "QURE", "EOSE", "SMR", "RDW", "RGTI",
     "SPY", "QQQ", "DIA",
 ]
 
