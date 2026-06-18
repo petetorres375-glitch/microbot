@@ -21,7 +21,7 @@ from typing import List, Dict, Optional
 
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockLatestTradeRequest
-from alpaca.trading.enums import OrderSide, OrderType
+from alpaca.trading.enums import OrderClass, OrderSide, OrderStatus, OrderType
 from alpaca.trading.requests import ReplaceOrderRequest
 
 from . import journal
@@ -58,17 +58,59 @@ def trail_swing_stops(broker, data_client=None) -> List[Dict]:
     # Original entry/stop per symbol from the journal (latest open row wins).
     basis = {r["symbol"]: r for r in journal.fetch_open_orders()}
 
-    # Live protective stop orders (bracket stop legs or standalone/OCO stops).
+    # Live protective stop orders.
+    # Standalone stops (SIMPLE class) appear directly in open_orders().
+    # Bracket/OCO stop legs are HELD status and only reachable via the target
+    # leg's .legs — they don't surface in get_orders(OPEN).
     stop_legs = {}
     try:
-        for o in broker.open_orders():
-            if (o.side == OrderSide.SELL
-                    and o.type in (OrderType.STOP, OrderType.STOP_LIMIT)
-                    and o.stop_price is not None):
-                stop_legs[o.symbol] = o
+        raw_orders = broker.open_orders()
     except Exception as e:
         print(f"  trail: could not list open orders ({e})")
         return adjusted
+
+    for o in raw_orders:
+        if o.side != OrderSide.SELL:
+            continue
+        if o.type in (OrderType.STOP, OrderType.STOP_LIMIT) and o.stop_price is not None:
+            stop_legs[o.symbol] = o
+        elif o.order_class == OrderClass.OCO:
+            # OCO target leg: fetching by ID returns the HELD stop sibling.
+            try:
+                full_o = broker.client.get_order_by_id(str(o.id))
+                for leg in (full_o.legs or []):
+                    if (leg.order_type in (OrderType.STOP, OrderType.STOP_LIMIT)
+                            and leg.stop_price is not None
+                            and leg.status not in (
+                                OrderStatus.CANCELED, OrderStatus.FILLED,
+                                OrderStatus.EXPIRED)):
+                        stop_legs[full_o.symbol] = leg
+                        break
+            except Exception as e:
+                print(f"  trail: could not fetch legs for {o.symbol} ({e})")
+
+    # Bracket orders: target leg has legs=None when fetched directly.
+    # For any bracket position still missing a stop leg, fetch the bracket
+    # parent (stored in journal as order_id) to find the HELD stop leg.
+    for rec in journal.fetch_open_orders():
+        sym = rec["symbol"]
+        if sym in stop_legs:
+            continue
+        parent_id = rec.get("order_id")
+        if not parent_id:
+            continue
+        try:
+            parent = broker.client.get_order_by_id(parent_id)
+            for leg in (parent.legs or []):
+                if (leg.order_type in (OrderType.STOP, OrderType.STOP_LIMIT)
+                        and leg.stop_price is not None
+                        and leg.status not in (
+                            OrderStatus.CANCELED, OrderStatus.FILLED,
+                            OrderStatus.EXPIRED)):
+                    stop_legs[sym] = leg
+                    break
+        except Exception as e:
+            print(f"  trail: could not fetch bracket parent for {sym} ({e})")
 
     for p in positions:
         sym = p["symbol"]
