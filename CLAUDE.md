@@ -272,7 +272,7 @@ Active portfolio: **BTI, CSCO, GOOG, INTC, NOK, RKLB, SPCX**. `MAX_OPEN_POSITION
 | BTI | $59.82 | British American Tobacco. Dividend momentum. 17 shares. Stop $56.98 (OCO), target $65.52. |
 | CSCO | $121.04 | Cisco. EMA pullback. 7 shares. Stop $113.98 (OCO), target $133.13. Slightly offside. |
 | GOOG | $365.95 | Google. Trend momentum. 6 shares (duplicate signal fired 2026-06-15). Stop $350.59 (OCO), target $399.12. |
-| INTC | $119.53 | Intel. EMA pullback. 3 shares. Stop $105.56 (bracket), target $147.47. +1.1R as of 2026-06-18. |
+| INTC | $119.53 | Intel. EMA pullback. 3 shares. Stop $126.70 (bracket, trailed from $105.56 at +1.0R 2026-06-18), target $147.47. |
 | NOK | $13.65 | Nokia. EMA pullback. 35 shares. Stop $12.26 (bracket), target $16.46. Entered 2026-06-18. |
 | RKLB | $109.24 | Rocket Lab. Breakout. 3 shares. Stop $91.93 (OCO), target $140.83. Fixed to OCO 2026-06-18. |
 | SPCX | $184.31 | SpaceX. Manual long-term hold. 2 shares. Stop $161.62 (simple stop), no target. |
