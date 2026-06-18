@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 import pytest
 
-from alpaca.trading.enums import OrderSide, OrderType
+from alpaca.trading.enums import OrderClass, OrderSide, OrderStatus, OrderType
 
 from microbot.trail import trail_swing_stops
 
@@ -35,6 +35,14 @@ class FakeDataClient:
 
 
 @dataclass
+class FakeLeg:
+    id: str
+    order_type: object
+    stop_price: object = None  # float or None
+    status: object = OrderStatus.HELD
+
+
+@dataclass
 class FakeOrder:
     id: str
     symbol: str
@@ -42,17 +50,22 @@ class FakeOrder:
     type: object = OrderType.STOP
     stop_price: float = 0.0
     order_class: object = None
+    legs: list = field(default_factory=list)
 
 
 class FakeClient:
     def __init__(self):
         self.replaced = []  # (order_id, new_stop)
         self.fail_replace = False
+        self.orders_by_id = {}  # id -> FakeOrder, for get_order_by_id
 
     def replace_order_by_id(self, order_id, req):
         if self.fail_replace:
             raise RuntimeError("rejected")
         self.replaced.append((order_id, req.stop_price))
+
+    def get_order_by_id(self, order_id):
+        return self.orders_by_id[order_id]
 
 
 class FakeBroker:
@@ -153,5 +166,62 @@ def test_take_profit_limit_order_not_mistaken_for_stop():
     broker, data, rows = make_world(price=110.0)
     broker._orders = [FakeOrder(id="tp-1", symbol="XYZ",
                                 type=OrderType.LIMIT, stop_price=None)]
+    assert run(broker, data, rows) == []
+    assert broker.client.replaced == []
+
+
+def test_oco_stop_leg_found_via_legs_and_ratchets():
+    """OCO target in open_orders → HELD stop found via .legs → ratchets."""
+    broker, data, rows = make_world(price=110.0)
+    oco_target = FakeOrder(
+        id="oco-target-1", symbol="XYZ",
+        side=OrderSide.SELL, type=OrderType.LIMIT, stop_price=None,
+        order_class=OrderClass.OCO,
+        legs=[FakeLeg(id="oco-stop-1", order_type=OrderType.STOP,
+                      stop_price=95.0, status=OrderStatus.HELD)],
+    )
+    broker._orders = [oco_target]
+    broker.client.orders_by_id["oco-target-1"] = oco_target
+    adjusted = run(broker, data, rows)
+    assert adjusted == [{"symbol": "XYZ", "old_stop": 95.0,
+                         "new_stop": 105.0, "r": 2.0}]
+    assert broker.client.replaced == [("oco-stop-1", 105.0)]
+
+
+def test_bracket_stop_leg_found_via_journal_parent():
+    """No stop in open_orders; bracket parent in journal order_id → HELD stop found → ratchets."""
+    broker, data, rows = make_world(price=110.0)
+    rows[0]["order_id"] = "bracket-parent-1"
+    broker._orders = []  # target leg not visible as a standalone open order
+    parent = FakeOrder(
+        id="bracket-parent-1", symbol="XYZ",
+        side=OrderSide.BUY, type=OrderType.MARKET, stop_price=None,
+        order_class=OrderClass.BRACKET,
+        legs=[
+            FakeLeg(id="bracket-target-1", order_type=OrderType.LIMIT,
+                    stop_price=None, status=OrderStatus.NEW),
+            FakeLeg(id="bracket-stop-1", order_type=OrderType.STOP,
+                    stop_price=95.0, status=OrderStatus.HELD),
+        ],
+    )
+    broker.client.orders_by_id["bracket-parent-1"] = parent
+    adjusted = run(broker, data, rows)
+    assert adjusted == [{"symbol": "XYZ", "old_stop": 95.0,
+                         "new_stop": 105.0, "r": 2.0}]
+    assert broker.client.replaced == [("bracket-stop-1", 105.0)]
+
+
+def test_oco_canceled_stop_leg_not_used():
+    """OCO target whose stop leg is CANCELED → no stop found → no ratchet."""
+    broker, data, rows = make_world(price=110.0)
+    oco_target = FakeOrder(
+        id="oco-target-2", symbol="XYZ",
+        side=OrderSide.SELL, type=OrderType.LIMIT, stop_price=None,
+        order_class=OrderClass.OCO,
+        legs=[FakeLeg(id="oco-stop-2", order_type=OrderType.STOP,
+                      stop_price=95.0, status=OrderStatus.CANCELED)],
+    )
+    broker._orders = [oco_target]
+    broker.client.orders_by_id["oco-target-2"] = oco_target
     assert run(broker, data, rows) == []
     assert broker.client.replaced == []
