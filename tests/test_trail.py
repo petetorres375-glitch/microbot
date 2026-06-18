@@ -41,6 +41,7 @@ class FakeOrder:
     side: object = OrderSide.SELL
     type: object = OrderType.STOP
     stop_price: float = 0.0
+    order_class: object = None
 
 
 class FakeClient:
