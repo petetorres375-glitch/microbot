@@ -491,6 +491,15 @@ class IntradayEngine:
         if not candidates:
             return
 
+        # NYSE holidays aren't weekends — check the Alpaca clock so we don't
+        # spin-wait on a holiday Friday thinking 9:30 AM means open.
+        try:
+            if not self.trading.get_clock().is_open:
+                print("Market is closed today (holiday?) — ORB engine halted.")
+                return
+        except Exception as e:
+            print(f"  clock check skipped: {e}")
+
         for sym in candidates:
             self.states[sym] = ORBState(symbol=sym)
 
