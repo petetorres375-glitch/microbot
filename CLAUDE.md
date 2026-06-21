@@ -46,6 +46,11 @@ The bot's job is to:
 
 `rsi2_reversion` keeps its own 1:1 / 3x ATR bracket (validated 2026-06-12: 532 trades, 60% WR, +0.186R over 3.5y) — the builders deliberately do not pass the global `rr` to it. A Minervini-style VCP breakout was tested the same day and rejected (7 trades in 3.5y, all losers). `LOOKBACK_DAYS` was raised 400 → 1100 because 200-bar-warmup strategies could never accumulate the 8 backtest trades needed for a screener score; full research scans take noticeably longer as a result.
 
+**Signal quality filters (added 2026-06-21):**
+- **Weekly trend filter**: all strategies except `rsi2_reversion` check that the daily bars' weekly close is above a rising 10-week EMA before firing. `rsi2_reversion` uses its own 200-day SMA filter instead. Falls back to "pass" when insufficient weekly history. Controlled via `weekly_filter=True/False` per strategy instance.
+- **MeanReversion higher-low gate**: entry bar's low must exceed the prior bar's low, filtering falling-knife entries where the dip is still continuing lower.
+- **Sector correlation cap**: engine skips new signals when `MAX_SAME_SECTOR` (default 2, env-var configurable) positions in the same sector are already held. 17 sectors mapped in `config.sector_map`. Symbols not in the map are uncapped.
+
 ## Scheduled CCR routines
 
 | Routine | ID | Schedule | Purpose |
@@ -182,6 +187,7 @@ The bot uses bracket orders (entry + stop + take-profit in one atomic order). Al
 | `microbot/approvals.py` | Human approval gate |
 | `microbot/splits.py` | Corporate action / split handling |
 | `microbot/trail.py` | Daily 1R stop ratchet for swing positions |
+| `microbot/performance.py` | Closed-trade performance summary (win rate, expectancy R, P&L by strategy) |
 | `microbot/reconcile.py` | Closes open journal orders by checking Alpaca bracket legs |
 | `microbot/diagnostics.py` | Lightweight pre-engine health check (credentials, Alpaca, verdicts, DB, imports) |
 | `microbot/premarket_check.py` | Full pre-market audit (adds stop order audit, git check, position R display) |
@@ -208,6 +214,9 @@ The file is stale-checked by date — if it's from a previous day, verdicts are 
 ## Running
 
 ```bash
+# Performance summary of all closed trades
+python -m microbot.performance
+
 # Research only (safe, no orders)
 python run_research.py
 
