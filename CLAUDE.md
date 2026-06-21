@@ -187,7 +187,7 @@ The bot uses bracket orders (entry + stop + take-profit in one atomic order). Al
 | `microbot/approvals.py` | Human approval gate |
 | `microbot/splits.py` | Corporate action / split handling |
 | `microbot/trail.py` | Daily 1R stop ratchet for swing positions |
-| `microbot/performance.py` | Closed-trade performance summary (win rate, expectancy R, P&L by strategy) |
+| `microbot/performance.py` | Closed-trade performance summary — runs automatically at end of each engine run, output in `engine.log` |
 | `microbot/reconcile.py` | Closes open journal orders by checking Alpaca bracket legs |
 | `microbot/diagnostics.py` | Lightweight pre-engine health check (credentials, Alpaca, verdicts, DB, imports) |
 | `microbot/premarket_check.py` | Full pre-market audit (adds stop order audit, git check, position R display) |
@@ -214,9 +214,6 @@ The file is stale-checked by date — if it's from a previous day, verdicts are 
 ## Running
 
 ```bash
-# Performance summary of all closed trades
-python -m microbot.performance
-
 # Research only (safe, no orders)
 python run_research.py
 

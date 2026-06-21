@@ -27,6 +27,7 @@ from . import splits
 from . import trail
 from . import verdicts as verdicts_mod
 from . import diagnostics
+from . import performance
 from .risk import RiskConfig, size_trade
 from .screener import research
 from .strategies import Signal, build_strategies_from_params
@@ -205,6 +206,8 @@ def run_once(research_only: bool = False, push_sheets: bool = False):
         top_candidates=result["rankings"][:3],
         equity=acct["equity"],
     )
+
+    performance.print_report()
 
     return result
 
