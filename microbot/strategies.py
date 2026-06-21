@@ -63,10 +63,18 @@ def _bracket(symbol, strategy, entry, atr_val, stop_mult, rr, reason) -> Signal:
 class Strategy:
     name = "base"
 
-    def __init__(self, rr: float = 2.0, atr_period: int = 14, stop_mult: float = 1.5):
+    def __init__(self, rr: float = 2.0, atr_period: int = 14, stop_mult: float = 1.5,
+                 weekly_filter: bool = True):
         self.rr = rr
         self.atr_period = atr_period
         self.stop_mult = stop_mult
+        self.weekly_filter = weekly_filter
+
+    def _weekly_aligned(self, df: pd.DataFrame) -> bool:
+        """True if the weekly trend is aligned (or weekly_filter is disabled)."""
+        if not self.weekly_filter:
+            return True
+        return ind.weekly_ema_aligned(df)
 
     def evaluate(self, symbol: str, df: pd.DataFrame) -> Optional[Signal]:
         raise NotImplementedError
@@ -87,6 +95,8 @@ class TrendMomentum(Strategy):
 
     def evaluate(self, symbol, df):
         if len(df) < self.min_bars():
+            return None
+        if not self._weekly_aligned(df):
             return None
         close = df["close"]
         fast = ind.ema(close, self.fast)
@@ -122,6 +132,8 @@ class MeanReversion(Strategy):
     def evaluate(self, symbol, df):
         if len(df) < self.min_bars():
             return None
+        if not self._weekly_aligned(df):
+            return None
         close = df["close"]
         rsi = ind.rsi(close, self.rsi_period)
         _, _, lower = ind.bollinger(close, self.bb_period)
@@ -133,8 +145,10 @@ class MeanReversion(Strategy):
         uptrend = close.iloc[-1] > long_trend.iloc[-1]
         oversold = rsi.iloc[-1] <= self.rsi_buy
         below_band = close.iloc[-1] <= lower.iloc[-1]
-        if uptrend and oversold and below_band:
-            why = f"RSI={rsi.iloc[-1]:.0f}, below lower BB, > MA{self.trend_ma}"
+        # Higher low confirms the dip is stabilising, not continuing lower.
+        higher_low = df["low"].iloc[-1] > df["low"].iloc[-2]
+        if uptrend and oversold and below_band and higher_low:
+            why = f"RSI={rsi.iloc[-1]:.0f}, below lower BB, > MA{self.trend_ma}, higher low"
             return _bracket(symbol, self.name, close.iloc[-1], a,
                             self.stop_mult, self.rr, why)
         return None
@@ -152,6 +166,8 @@ class Breakout(Strategy):
 
     def evaluate(self, symbol, df):
         if len(df) < self.min_bars():
+            return None
+        if not self._weekly_aligned(df):
             return None
         close = df["close"]
         # Use the channel up to the PRIOR bar so today's bar can break it.
@@ -190,6 +206,8 @@ class DividendMomentum(Strategy):
 
     def evaluate(self, symbol, df):
         if len(df) < self.min_bars():
+            return None
+        if not self._weekly_aligned(df):
             return None
         close = df["close"]
         fast = ind.ema(close, self.fast)
@@ -237,6 +255,8 @@ class EMAPullback(Strategy):
     def evaluate(self, symbol, df):
         if len(df) < self.min_bars():
             return None
+        if not self._weekly_aligned(df):
+            return None
         close = df["close"]
         e1 = ind.ema(close, self.ema1)
         e2 = ind.ema(close, self.ema2)
@@ -282,6 +302,8 @@ class Breakout52w(Strategy):
     def evaluate(self, symbol, df):
         if len(df) < self.min_bars():
             return None
+        if not self._weekly_aligned(df):
+            return None
         close = df["close"]
         prior_high = df["high"].iloc[-(self.lookback + 1):-1].max()
         a = ind.atr(df, self.atr_period).iloc[-1]
@@ -318,6 +340,7 @@ class RSI2Reversion(Strategy):
     def __init__(self, rsi_period=2, rsi_buy=10, trend_ma=200, stretch_ma=5, **kw):
         kw.setdefault("rr", 1.0)
         kw.setdefault("stop_mult", 3.0)
+        kw.setdefault("weekly_filter", False)  # validated without this filter; 200-day SMA handles it
         super().__init__(**kw)
         self.rsi_period, self.rsi_buy = rsi_period, rsi_buy
         self.trend_ma, self.stretch_ma = trend_ma, stretch_ma

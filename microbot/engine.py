@@ -48,6 +48,19 @@ def apply_trade_analyzer(signal_row: dict, vetoes: dict) -> bool:
 # --------------------------------------------------------------------------
 
 
+def _sector_ok(symbol: str, held: set,
+               sector_map: dict | None = None,
+               max_same_sector: int | None = None) -> bool:
+    """Return False if we already hold max_same_sector positions in this symbol's sector."""
+    smap = sector_map if sector_map is not None else settings.sector_map
+    cap = max_same_sector if max_same_sector is not None else settings.max_same_sector
+    sector = smap.get(symbol)
+    if not sector:
+        return True
+    same = sum(1 for s in held if smap.get(s) == sector)
+    return same < cap
+
+
 def _confirm_live():
     if settings.live_trading:
         gate = ("Trades will be QUEUED for your per-trade approval."
@@ -144,6 +157,10 @@ def run_once(research_only: bool = False, push_sheets: bool = False):
 
     for s in result["live_signals"]:
         if s["symbol"] in held:
+            continue
+        if not _sector_ok(s["symbol"], held):
+            print(f"  skip {s['symbol']}: {settings.sector_map.get(s['symbol'])} "
+                  f"sector cap ({settings.max_same_sector})")
             continue
         if not apply_trade_analyzer(s, vetoes):
             print(f"  vetoed by analyzer: {s['strategy']}/{s['symbol']}")

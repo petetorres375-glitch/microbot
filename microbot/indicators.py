@@ -62,6 +62,27 @@ def donchian(df: pd.DataFrame, period: int = 20):
     return upper, lower
 
 
+def weekly_ema_aligned(df: pd.DataFrame, period: int = 10) -> bool:
+    """
+    True if the weekly chart is in an uptrend: price is above a rising EMA(period).
+    Resamples the daily bars to weekly Friday closes — no extra API call needed.
+    Falls back to True (no filter) when the index isn't a DatetimeIndex or there
+    aren't enough weekly bars to compute the EMA reliably.
+    """
+    if not isinstance(df.index, pd.DatetimeIndex):
+        return True
+    try:
+        weekly_close = df["close"].resample("W-FRI").last().dropna()
+    except Exception:
+        return True
+    if len(weekly_close) < period + 2:
+        return True
+    w_ema = weekly_close.ewm(span=period, adjust=False).mean()
+    above_ema = bool(weekly_close.iloc[-1] > w_ema.iloc[-1])
+    ema_rising = bool(w_ema.iloc[-1] > w_ema.iloc[-2])
+    return above_ema and ema_rising
+
+
 def adx(df: pd.DataFrame, period: int = 14) -> pd.Series:
     """
     Average Directional Index — trend STRENGTH (not direction), 0-100.

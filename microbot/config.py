@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from typing import List
+from typing import Dict, List
 
 try:
     from dotenv import load_dotenv
@@ -101,6 +101,37 @@ class Settings:
 
     # --- Storage ---
     db_path: str = os.getenv("DB_PATH", "microbot.db")
+
+    # --- Sector correlation cap ---
+    # Prevents holding more than max_same_sector positions in the same sector.
+    # Symbols not in sector_map are uncapped.
+    max_same_sector: int = int(os.getenv("MAX_SAME_SECTOR", "2"))
+    sector_map: Dict[str, str] = field(default_factory=lambda: {
+        # tech
+        "GOOG": "tech", "CSCO": "tech", "INTC": "tech", "NVDA": "tech",
+        "TSLA": "tech", "AMZN": "tech", "SHOP": "tech", "ALAB": "tech",
+        "IONQ": "tech", "QBTS": "tech", "MRVL": "tech", "PLTR": "tech",
+        "HOOD": "tech", "SOFI": "tech", "AMD": "tech",
+        # energy
+        "CVX": "energy", "EPD": "energy", "KMI": "energy",
+        "ET": "energy", "IREN": "energy", "RIG": "energy",
+        # healthcare/biotech
+        "ABBV": "healthcare", "LEGN": "healthcare", "TGTX": "healthcare",
+        "PFE": "healthcare", "LLY": "healthcare",
+        # telecom
+        "NOK": "telecom", "VZ": "telecom", "T": "telecom",
+        # consumer staples
+        "BTI": "consumer_staples", "MO": "consumer_staples", "KO": "consumer_staples",
+        # REIT
+        "NLY": "reit", "AGNC": "reit", "O": "reit", "STAG": "reit",
+        # industrial/space
+        "RKLB": "industrial", "LUNR": "industrial",
+        # financials
+        "BAC": "financials",
+        # consumer discretionary
+        "NIO": "consumer_disc", "RIVN": "consumer_disc",
+        "GRAB": "consumer_disc", "UBER": "consumer_disc",
+    })
 
     def assert_keys(self):
         if not self.api_key or not self.api_secret:
