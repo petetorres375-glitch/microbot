@@ -106,6 +106,11 @@ class Settings:
     # Prevents holding more than max_same_sector positions in the same sector.
     # Symbols not in sector_map are uncapped.
     max_same_sector: int = int(os.getenv("MAX_SAME_SECTOR", "2"))
+
+    # --- Intraday scanner float cap ---
+    # Low-float focus: only candidates with public float <= this many million shares.
+    # Set to 0 to disable. Symbols with no float data from yfinance always pass through.
+    max_float_m: float = float(os.getenv("MAX_FLOAT_M", "20"))
     sector_map: Dict[str, str] = field(default_factory=lambda: {
         # tech
         "GOOG": "tech", "CSCO": "tech", "INTC": "tech", "NVDA": "tech",

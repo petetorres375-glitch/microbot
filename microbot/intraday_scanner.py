@@ -110,7 +110,7 @@ def _get_yf_data(symbol: str) -> dict:
 def scan(top: int = 5, min_gap: float = MIN_GAP_PCT,
          min_relvol: float = MIN_REL_VOL,
          min_price: float = MIN_PRICE,
-         max_float_m: float = MAX_FLOAT_M) -> List[Dict]:
+         max_float_m: float | None = None) -> List[Dict]:
     """
     Find today's top day trading candidates.
 
@@ -177,6 +177,12 @@ def scan(top: int = 5, min_gap: float = MIN_GAP_PCT,
         yf_data = _get_yf_data(c["symbol"])
         c["rel_volume"] = yf_data["rel_volume"]
         c["float_shares"] = yf_data["float_shares"]
+
+    # Resolve float cap: caller override → env var → hardcoded default
+    if max_float_m is None:
+        max_float_m = settings.max_float_m
+    if max_float_m <= 0:
+        max_float_m = float("inf")
 
     # Filter by relative volume and float (skip float filter when data unavailable)
     max_float = max_float_m * 1_000_000
