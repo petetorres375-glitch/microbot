@@ -42,6 +42,7 @@ INTRADAY_UNIVERSE = [
 MIN_GAP_PCT = 0.05
 MIN_REL_VOL = 2.0
 MIN_PRICE = 5.0
+MAX_FLOAT_M = 20  # million shares — low-float focus (Ross Cameron style)
 CANDIDATES_FILE = "intraday_candidates.json"
 
 
@@ -76,35 +77,40 @@ def _batch_snapshots(symbols: List[str]) -> Dict:
     return result
 
 
-def _rel_volume(symbol: str, _current_volume: float) -> float:
-    """Pace-adjusted relative volume: today's per-minute rate vs. historical average.
+def _get_yf_data(symbol: str) -> dict:
+    """Fetch pace-adjusted relative volume and float shares in one yfinance call.
 
-    Both volumes come from yfinance (consolidated) to avoid the ~50x undercount
-    from Alpaca's IEX-only daily_bar.volume vs. yfinance's consolidated average.
+    rel_volume: today's per-minute rate vs. historical average (consolidated).
+    float_shares: public float from yf.info, falls back to shares outstanding.
+    Returns None for float_shares when data is unavailable (don't filter those out).
     """
+    result = {"rel_volume": 0.0, "float_shares": None}
     try:
         now_et = datetime.datetime.now(ZoneInfo("America/New_York"))
         market_open = now_et.replace(hour=9, minute=30, second=0, microsecond=0)
         elapsed_minutes = max(1.0, (now_et - market_open).total_seconds() / 60)
         tk = yf.Ticker(symbol)
         avg = tk.fast_info.three_month_average_volume
-        if not avg or avg <= 0:
-            return 0.0
-        hist = tk.history(period="1d", interval="1m")
-        today_vol = float(hist["Volume"].sum()) if not hist.empty else 0.0
-        if today_vol <= 0:
-            return 0.0
-        per_min_today = today_vol / elapsed_minutes
-        per_min_avg = avg / 390
-        return round(per_min_today / per_min_avg, 2)
+        if avg and avg > 0:
+            hist = tk.history(period="1d", interval="1m")
+            today_vol = float(hist["Volume"].sum()) if not hist.empty else 0.0
+            if today_vol > 0:
+                per_min_today = today_vol / elapsed_minutes
+                per_min_avg = avg / 390
+                result["rel_volume"] = round(per_min_today / per_min_avg, 2)
+        float_shares = tk.info.get("floatShares")
+        if not float_shares:
+            float_shares = getattr(tk.fast_info, "shares", None)
+        result["float_shares"] = float_shares
     except Exception:
         pass
-    return 0.0
+    return result
 
 
 def scan(top: int = 5, min_gap: float = MIN_GAP_PCT,
          min_relvol: float = MIN_REL_VOL,
-         min_price: float = MIN_PRICE) -> List[Dict]:
+         min_price: float = MIN_PRICE,
+         max_float_m: float = MAX_FLOAT_M) -> List[Dict]:
     """
     Find today's top day trading candidates.
 
@@ -166,12 +172,22 @@ def scan(top: int = 5, min_gap: float = MIN_GAP_PCT,
     print(f"Found {len(gap_candidates)} symbols gapping >= {min_gap:.0%}. "
           f"Checking relative volume...")
 
-    # Fetch rel_volume only for gap candidates (small set = fast)
+    # Fetch rel_volume + float only for gap candidates (small set = fast)
     for c in gap_candidates:
-        c["rel_volume"] = _rel_volume(c["symbol"], c["daily_volume"])
+        yf_data = _get_yf_data(c["symbol"])
+        c["rel_volume"] = yf_data["rel_volume"]
+        c["float_shares"] = yf_data["float_shares"]
 
-    # Filter by relative volume
-    filtered = [c for c in gap_candidates if c["rel_volume"] >= min_relvol]
+    # Filter by relative volume and float (skip float filter when data unavailable)
+    max_float = max_float_m * 1_000_000
+    filtered = []
+    for c in gap_candidates:
+        if c["rel_volume"] < min_relvol:
+            continue
+        if c["float_shares"] is not None and c["float_shares"] > max_float:
+            print(f"  skip {c['symbol']}: float {c['float_shares']/1e6:.1f}M > {max_float_m:.0f}M limit")
+            continue
+        filtered.append(c)
 
     # Sort by gap * rel_volume — strongest combined signal first
     filtered.sort(key=lambda c: c["gap_pct"] * c["rel_volume"], reverse=True)
@@ -195,20 +211,25 @@ def main():
                    help="Minimum relative volume (default: 2.0)")
     p.add_argument("--min-price", type=float, default=MIN_PRICE,
                    help="Minimum price filter (default: 5.0)")
+    p.add_argument("--max-float", type=float, default=MAX_FLOAT_M,
+                   help="Maximum float in millions (default: 20M). Use 0 to disable.")
     args = p.parse_args()
 
     candidates = scan(top=args.top, min_gap=args.min_gap, min_relvol=args.min_relvol,
-                      min_price=args.min_price)
+                      min_price=args.min_price,
+                      max_float_m=args.max_float if args.max_float > 0 else float("inf"))
 
     if not candidates:
         print("No qualifying candidates today.")
         return
 
-    print(f"\n{'Symbol':<8} {'Gap%':>6} {'Price':>7} {'RelVol':>7} {'Verdict':<8}")
-    print("-" * 45)
+    print(f"\n{'Symbol':<8} {'Gap%':>6} {'Price':>7} {'RelVol':>7} {'Float':>7} {'Verdict':<8}")
+    print("-" * 53)
     for c in candidates:
+        f = c.get("float_shares")
+        float_str = f"{f/1e6:.1f}M" if f else "N/A"
         print(f"{c['symbol']:<8} {c['gap_pct']:>5.1%} {c['price']:>7.2f} "
-              f"{c['rel_volume']:>7.1f}x {c['verdict']:<8}")
+              f"{c['rel_volume']:>7.1f}x {float_str:>7} {c['verdict']:<8}")
 
     print(f"\nCandidates written to {CANDIDATES_FILE}")
 
