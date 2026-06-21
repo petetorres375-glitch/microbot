@@ -14,4 +14,5 @@ service_account.json
 *.log
 # optimizer_proposals.json is intentionally tracked (remote agent pushes it)
 intraday_candidates.json
+*.pdf
 
