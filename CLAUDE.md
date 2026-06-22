@@ -269,21 +269,21 @@ Automates portfolio restructuring in one step. Given a `--target` list:
 
 Use `--dry-run` to preview without placing orders. Built 2026-06-04 to reduce manual workflow.
 
-## Current focused universe (as of 2026-06-18)
+## Current focused universe (as of 2026-06-22)
 
-Active portfolio: **BTI, CSCO, GOOG, INTC, NOK, RKLB, SPCX**. `MAX_OPEN_POSITIONS=8` — 7/8 (1 slot open). SPCX: re-entered 2026-06-18 at $184.31, 2 shares, stop $161.62 (simple stop, long-term hold, no target). Trail cron ratchets once up ≥ 1R.
+Active portfolio: **BTI, CSCO, F, INTC, NOK, RKLB, SPCX**. `MAX_OPEN_POSITIONS=8` — 7/8 (1 slot open). SPCX: re-entered 2026-06-18 at $184.31, 2 shares, stop $161.62 (simple stop, long-term hold, no target). Trail cron ratchets once up ≥ 1R.
 
 | Symbol | Entry | Notes |
 |---|---|---|
-| BTI | $59.82 | British American Tobacco. Dividend momentum. 17 shares. Stop $56.98 (OCO), target $65.52. |
-| CSCO | $121.04 | Cisco. EMA pullback. 7 shares. Stop $113.98 (OCO), target $133.13. Slightly offside. |
-| GOOG | $365.95 | Google. Trend momentum. 6 shares (duplicate signal fired 2026-06-15). Stop $350.59 (OCO), target $399.12. |
-| INTC | $119.53 | Intel. EMA pullback. 3 shares. Stop $126.70 (bracket, trailed from $105.56 at +1.0R 2026-06-18), target $147.47. |
-| NOK | $13.65 | Nokia. EMA pullback. 35 shares. Stop $12.26 (bracket), target $16.46. Entered 2026-06-18. |
-| RKLB | $109.24 | Rocket Lab. Breakout. 3 shares. Stop $91.93 (OCO), target $140.83. Fixed to OCO 2026-06-18. |
+| BTI | $59.82 | British American Tobacco. Dividend momentum. 17 shares. Stop $56.98 (HELD), target $65.52. |
+| CSCO | $121.04 | Cisco. EMA pullback. 7 shares. Stop $113.98 (HELD), target $133.13. Slightly offside. |
+| F | $14.37 | Ford. 54 shares. Stop $13.34 (HELD), target $16.07. New entry 2026-06-22. |
+| INTC | $120.70 | Intel. EMA pullback. 3 shares. Stop $130.19 (HELD, trailed from $105.56), target $147.47. Stop above entry — locked in profit. |
+| NOK | $13.65 | Nokia. EMA pullback. 35 shares. Stop $12.26 (HELD), target $16.46. Entered 2026-06-18. |
+| RKLB | $109.24 | Rocket Lab. Breakout. 3 shares. Stop $91.93 (HELD), target $140.83. |
 | SPCX | $184.31 | SpaceX. Manual long-term hold. 2 shares. Stop $161.62 (simple stop), no target. |
 
-Recently closed: SPCX stopped out 2026-06-16 at $196.30 (+$46.72, +1.02R; IPO re-entry, trail stop hit 3:47 PM ET). GRAB EOD close 2026-06-16 at $3.52 (-$13.15, -0.25R, ORB intraday). F market sell 2026-06-16 at $14.62 (-$29.89, -0.67R, one-shot cron). UBXG stopped out 2026-06-12 at $7.75 (+$36.92, ORB intraday). SPCX target hit 2026-06-12 at $165.64 (+$98.98, SpaceX IPO trade, ~1.87R). GOOG stopped out 2026-06-11 at $344.36 (~-1.0R). TGTX hit target +$88.76 (+1.52R) on 2026-06-04. KEEL stopped out -$52.36 (-1.00R) on 2026-06-04. LEGN manual close $0 on 2026-06-04. IREN stopped out 2026-06-04. LUNR stopped out 2026-06-04. VALE stopped out 2026-06-04 at $15.84.
+Recently closed: GOOG stopped out 2026-06-22 at $350.59 (6 shares, ~-1.0R). SPCX stopped out 2026-06-16 at $196.30 (+$46.72, +1.02R; IPO re-entry, trail stop hit 3:47 PM ET). GRAB EOD close 2026-06-16 at $3.52 (-$13.15, -0.25R, ORB intraday). F market sell 2026-06-16 at $14.62 (-$29.89, -0.67R, one-shot cron). UBXG stopped out 2026-06-12 at $7.75 (+$36.92, ORB intraday). SPCX target hit 2026-06-12 at $165.64 (+$98.98, SpaceX IPO trade, ~1.87R). GOOG stopped out 2026-06-11 at $344.36 (~-1.0R). TGTX hit target +$88.76 (+1.52R) on 2026-06-04. KEEL stopped out -$52.36 (-1.00R) on 2026-06-04. LEGN manual close $0 on 2026-06-04. IREN stopped out 2026-06-04. LUNR stopped out 2026-06-04. VALE stopped out 2026-06-04 at $15.84.
 
 ## Environment variables (.env)
 
