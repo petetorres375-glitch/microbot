@@ -271,7 +271,7 @@ Use `--dry-run` to preview without placing orders. Built 2026-06-04 to reduce ma
 
 ## Current focused universe (as of 2026-06-18)
 
-Active portfolio: **BTI, CSCO, GOOG, INTC, NOK, RKLB, SPCX**. `MAX_OPEN_POSITIONS=5` — 7/5 (over limit, no new entries until slots open). SPCX: re-entered 2026-06-18 at $184.31, 2 shares, stop $161.62 (simple stop, long-term hold, no target). Trail cron ratchets once up ≥ 1R.
+Active portfolio: **BTI, CSCO, GOOG, INTC, NOK, RKLB, SPCX**. `MAX_OPEN_POSITIONS=8` — 7/8 (1 slot open). SPCX: re-entered 2026-06-18 at $184.31, 2 shares, stop $161.62 (simple stop, long-term hold, no target). Trail cron ratchets once up ≥ 1R.
 
 | Symbol | Entry | Notes |
 |---|---|---|
