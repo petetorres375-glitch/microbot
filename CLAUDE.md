@@ -271,18 +271,17 @@ Use `--dry-run` to preview without placing orders. Built 2026-06-04 to reduce ma
 
 ## Current focused universe (as of 2026-06-23)
 
-Active portfolio: **BTI, CSCO, F, INTC, NOK, RKLB**. `MAX_OPEN_POSITIONS=8` — 6/8 (2 slots open).
+Active portfolio: **BTI, CSCO, F, NOK, RKLB**. `MAX_OPEN_POSITIONS=8` — 5/8 (3 slots open).
 
 | Symbol | Entry | Notes |
 |---|---|---|
 | BTI | $59.82 | British American Tobacco. Dividend momentum. 17 shares. Stop $56.98 (HELD), target $65.52. |
 | CSCO | $121.04 | Cisco. EMA pullback. 7 shares. Stop $113.98 (HELD), target $133.13. Slightly offside. |
 | F | $14.37 | Ford. 54 shares. Stop $13.34 (HELD), target $16.07. New entry 2026-06-22. |
-| INTC | $120.70 | Intel. EMA pullback. 3 shares. Stop $130.19 (HELD, trailed from $105.56), target $147.47. Stop above entry — locked in profit. |
 | NOK | $13.65 | Nokia. EMA pullback. 35 shares. Stop $12.26 (HELD), target $16.46. Entered 2026-06-18. |
 | RKLB | $109.24 | Rocket Lab. Breakout. 3 shares. Stop $91.93 (HELD), target $140.83. |
 
-Recently closed: SPCX stopped out 2026-06-22 at $161.61 (2 shares, entry $184.31, −$45.40, ~-1.0R; stop triggered after-hours 6:59 PM ET on SpaceX bond-issuance selloff). GOOG stopped out 2026-06-22 at $350.59 (6 shares, ~-1.0R). SPCX stopped out 2026-06-16 at $196.30 (+$46.72, +1.02R; IPO re-entry, trail stop hit 3:47 PM ET). GRAB EOD close 2026-06-16 at $3.52 (-$13.15, -0.25R, ORB intraday). F market sell 2026-06-16 at $14.62 (-$29.89, -0.67R, one-shot cron). UBXG stopped out 2026-06-12 at $7.75 (+$36.92, ORB intraday). SPCX target hit 2026-06-12 at $165.64 (+$98.98, SpaceX IPO trade, ~1.87R). GOOG stopped out 2026-06-11 at $344.36 (~-1.0R). TGTX hit target +$88.76 (+1.52R) on 2026-06-04. KEEL stopped out -$52.36 (-1.00R) on 2026-06-04. LEGN manual close $0 on 2026-06-04. IREN stopped out 2026-06-04. LUNR stopped out 2026-06-04. VALE stopped out 2026-06-04 at $15.84.
+Recently closed: INTC stopped out 2026-06-23 at $131.63 (3 shares, entry $120.70, +$32.79, ~+0.72R; trail-ratcheted stop hit at market open in Nasdaq selloff). SPCX stopped out 2026-06-22 at $161.61 (2 shares, entry $184.31, −$45.40, ~-1.0R; stop triggered after-hours 6:59 PM ET on SpaceX bond-issuance selloff). GOOG stopped out 2026-06-22 at $350.59 (6 shares, ~-1.0R). SPCX stopped out 2026-06-16 at $196.30 (+$46.72, +1.02R; IPO re-entry, trail stop hit 3:47 PM ET). GRAB EOD close 2026-06-16 at $3.52 (-$13.15, -0.25R, ORB intraday). F market sell 2026-06-16 at $14.62 (-$29.89, -0.67R, one-shot cron). UBXG stopped out 2026-06-12 at $7.75 (+$36.92, ORB intraday). SPCX target hit 2026-06-12 at $165.64 (+$98.98, SpaceX IPO trade, ~1.87R). GOOG stopped out 2026-06-11 at $344.36 (~-1.0R). TGTX hit target +$88.76 (+1.52R) on 2026-06-04. KEEL stopped out -$52.36 (-1.00R) on 2026-06-04. LEGN manual close $0 on 2026-06-04. IREN stopped out 2026-06-04. LUNR stopped out 2026-06-04. VALE stopped out 2026-06-04 at $15.84.
 
 ## Environment variables (.env)
 
