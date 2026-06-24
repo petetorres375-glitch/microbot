@@ -23,7 +23,8 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 
-from alpaca.trading.requests import GetOrderByIdRequest
+from alpaca.trading.requests import GetOrderByIdRequest, GetOrdersRequest
+from alpaca.trading.enums import QueryOrderStatus
 
 from .broker import Broker
 from . import journal
@@ -73,6 +74,44 @@ def _status(order) -> str:
     s = getattr(order, "status", "")
     val = s.value if hasattr(s, "value") else str(s)
     return str(val).lower()
+
+
+def _side(order) -> str:
+    s = getattr(order, "side", "")
+    val = s.value if hasattr(s, "value") else str(s)
+    return str(val).lower()
+
+
+def _find_filled_sell(broker: Broker, symbol: str) -> tuple[float, str] | None:
+    """Search Alpaca's closed orders for the most recent filled sell on symbol.
+
+    Used when a position is gone but no bracket leg shows as filled — e.g. when
+    trail.py replaced the original bracket stop with a standalone stop/OCO order.
+    Returns (exit_price, outcome) or None.
+    """
+    try:
+        req = GetOrdersRequest(status=QueryOrderStatus.CLOSED, symbols=[symbol], limit=20)
+        orders = broker.client.get_orders(filter=req)
+    except Exception:
+        return None
+
+    filled_sells = [
+        o for o in orders
+        if _side(o) == "sell" and _status(o) == "filled" and _filled_price(o) is not None
+    ]
+    if not filled_sells:
+        return None
+
+    # Most recent filled sell wins
+    filled_sells.sort(
+        key=lambda o: getattr(o, "filled_at", None) or getattr(o, "submitted_at", None),
+        reverse=True,
+    )
+    best = filled_sells[0]
+    price = _filled_price(best)
+    otype = str(getattr(best, "order_type", "") or "").lower()
+    outcome = "target" if ("limit" in otype and "stop" not in otype) else "stop"
+    return price, outcome
 
 
 def _build_closed_trade(open_row: dict, order) -> ClosedTrade | None:
@@ -138,13 +177,28 @@ def reconcile_once(broker: Broker | None = None, dry_run: bool = False) -> list[
             # Check if the position itself is gone from Alpaca (manual close)
             held = {p.symbol for p in broker.client.get_all_positions()}
             if row["symbol"] not in held and _status(order) == "filled":
-                # Entry filled but position gone and no bracket leg filled →
-                # position was closed manually outside the bracket system
-                trade = ClosedTrade(
-                    oid, row["symbol"], row["strategy"], int(row["qty"]),
-                    float(row["entry"]), float(row["entry"]),
-                    "manual", 0.0, 0.0,
-                )
+                # Entry filled, position gone, no bracket leg filled.
+                # Common cause: trail.py replaced the original bracket stop with a
+                # standalone stop/OCO — that order won't appear as a bracket leg.
+                # Search Alpaca's closed orders for the actual exit fill.
+                exit_info = _find_filled_sell(broker, row["symbol"])
+                if exit_info:
+                    exit_price, outcome = exit_info
+                    qty = int(row["qty"])
+                    entry_price = float(row["entry"])
+                    pnl = (exit_price - entry_price) * qty
+                    risk = entry_price - float(row["stop"])
+                    r_mult = (exit_price - entry_price) / risk if risk > 0 else 0.0
+                    trade = ClosedTrade(
+                        oid, row["symbol"], row["strategy"], qty,
+                        entry_price, exit_price, outcome, pnl, r_mult,
+                    )
+                else:
+                    trade = ClosedTrade(
+                        oid, row["symbol"], row["strategy"], int(row["qty"]),
+                        float(row["entry"]), float(row["entry"]),
+                        "manual", 0.0, 0.0,
+                    )
             else:
                 print(f"  · {row['symbol']} still open")
                 continue
