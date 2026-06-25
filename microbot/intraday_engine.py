@@ -35,8 +35,9 @@ from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
 from alpaca.trading.client import TradingClient
 from alpaca.trading.requests import (
     GetOrdersRequest, MarketOrderRequest, StopOrderRequest,
+    TakeProfitRequest, StopLossRequest,
 )
-from alpaca.trading.enums import OrderSide, TimeInForce
+from alpaca.trading.enums import OrderClass, OrderSide, TimeInForce
 
 from .config import settings
 from . import journal
@@ -292,7 +293,8 @@ class IntradayEngine:
 
     def _enter(self, sym: str, price: float) -> bool:
         s = self.states[sym]
-        risk_per_share = price - s.orb_low
+        stop = s.orb_low
+        risk_per_share = price - stop
         if risk_per_share <= 0:
             return False
 
@@ -303,44 +305,48 @@ class IntradayEngine:
                   f"${risk_budget:.2f} budget")
             return False
 
-        # Market entry
+        # Estimate target from snapshot price (close to fill for sizing).
+        # Bracket order is atomic — entry + stop + target in one request.
+        # A standalone stop placed after fill triggers Alpaca's wash-trade guard.
+        estimated_target = round(price + 2.0 * (price - stop), 2)
         try:
             entry_order = self.trading.submit_order(MarketOrderRequest(
                 symbol=sym,
                 qty=qty,
                 side=OrderSide.BUY,
                 time_in_force=TimeInForce.DAY,
+                order_class=OrderClass.BRACKET,
+                take_profit=TakeProfitRequest(limit_price=estimated_target),
+                stop_loss=StopLossRequest(stop_price=round(stop, 2)),
             ))
         except Exception as e:
             print(f"  entry failed {sym}: {e}")
             return False
 
-        time.sleep(2)  # let fill propagate
-        try:
-            filled = self.trading.get_order_by_id(entry_order.id)
-            fill = float(filled.filled_avg_price or price)
-        except Exception:
-            fill = price
-
-        stop = s.orb_low
-        target = round(fill + 2.0 * (fill - stop), 2)
-
-        # Submit protective stop immediately
-        stop_id = self._submit_stop(sym, qty, stop)
-        if not stop_id:
-            # Never hold an unprotected position — bail out at market
-            print(f"  ABORT {sym}: stop could not be placed, closing entry")
+        # Wait for fill (up to 10s)
+        fill = price
+        for _ in range(10):
             try:
-                self.trading.submit_order(MarketOrderRequest(
-                    symbol=sym, qty=qty,
-                    side=OrderSide.SELL,
-                    time_in_force=TimeInForce.DAY,
-                ))
-            except Exception as e:
-                print(f"  EMERGENCY: close also failed {sym}: {e} — "
-                      f"manual intervention needed")
-            s.closed = True
-            return False
+                filled = self.trading.get_order_by_id(entry_order.id)
+                if filled.filled_avg_price:
+                    fill = float(filled.filled_avg_price)
+                    break
+            except Exception:
+                pass
+            time.sleep(1)
+
+        # Extract stop leg ID from bracket legs for trail management
+        stop_order_id = ""
+        try:
+            order = self.trading.get_order_by_id(entry_order.id)
+            for leg in (order.legs or []):
+                if "stop" in str(leg.type).lower():
+                    stop_order_id = str(leg.id)
+                    break
+        except Exception:
+            pass
+
+        target = round(fill + 2.0 * (fill - stop), 2)
 
         s.in_trade = True
         s.qty_total = qty
@@ -350,7 +356,7 @@ class IntradayEngine:
         s.initial_risk = fill - stop
         s.target_price = target
         s.highest_price = fill
-        s.stop_order_id = stop_id
+        s.stop_order_id = stop_order_id
 
         dollar_risk = round(qty * (fill - stop), 2)
         print(f"  ENTER {sym}: {qty} shares @ {fill:.2f}  "
