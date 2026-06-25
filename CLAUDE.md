@@ -56,7 +56,7 @@ The bot's job is to:
 | Routine | ID | Schedule | Purpose |
 |---|---|---|---|
 | Pre-Market Diagnostics | `trig_01RGqaa5TuyTVHn2ThGDmxSg` | Weekdays 7:30 AM ET | Full system check: credentials, Alpaca, open position stop audit, DB, git, core imports. GO/NO-GO verdict with ~2 hours to fix before trading starts |
-| Morning signal analysis | `trig_019TFaNMJyiH1atY2kykNHGD` | Weekdays 8:30 AM ET | Web-searches news on universe, delivers CLEAN/CAUTION/AVOID verdicts, pushes `morning_verdicts.json` to repo |
+| Morning signal analysis | `trig_019TFaNMJyiH1atY2kykNHGD` | Weekdays 8:30 AM ET | Web-searches news on universe, delivers CLEAN/CAUTION/AVOID verdicts, writes `morning_verdicts_ccr.json` to Google Drive folder (GitHub push blocked by CCR proxy) |
 | Intraday pre-market scanner | `trig_01TX4CDGSGMLscLLgtkgeKAr` | Weekdays 9:15 AM ET | Runs gap scanner, web-searches news on candidates, prints CLEAN/MIXED/AVOID DAY briefing |
 | Daily research scan | `trig_019qsZJECstukLDhqDFXcv6R` | Weekdays 9:35 AM ET | Runs `run_research.py`, pushes ranked candidates + live signals to Google Sheets |
 | Weekly optimizer | `trig_01PYxALzYVnZuA88Kpror5Qo` | Mondays 9:00 AM ET | Walk-forward grid search, pushes `optimizer_proposals.json` to repo if improvements found |
@@ -70,6 +70,7 @@ CCR routines handle analysis and research. **Execution (actual order placement) 
 ```
 # crontab -l
 SHELL=/bin/bash
+50 8 * * 1-5 cd /home/lenovo-home/microbot && source .venv/bin/activate && python fetch_verdicts.py >> /home/lenovo-home/microbot/verdicts.log 2>&1
 35 9 * * 1-5 cd /home/lenovo-home/microbot && git pull --quiet && source .venv/bin/activate && python -m microbot.engine >> /home/lenovo-home/microbot/engine.log 2>&1
 34 9 * * 1-5 cd /home/lenovo-home/microbot && git pull --quiet && source .venv/bin/activate && python run_intraday.py >> /home/lenovo-home/microbot/intraday.log 2>&1
 36 9 * * 1-5 cd /home/lenovo-home/microbot && source .venv/bin/activate && python -m microbot.trail >> /home/lenovo-home/microbot/trail.log 2>&1
@@ -79,9 +80,11 @@ SHELL=/bin/bash
 
 **Important:** `SHELL=/bin/bash` is required — cron defaults to `/bin/sh` (dash on Ubuntu) which does not support `source`. Without it, both jobs silently fail at the activate step and never run.
 
-Both crons do `git pull` before running. The engine needs it to pick up the latest `morning_verdicts.json`; the intraday cron needs it so code changes pushed after 9:35 AM the previous day are picked up before the scanner runs (the intraday cron runs one minute before the engine cron, so without its own pull it would always lag a full day behind).
+The `fetch_verdicts.py` cron at 8:50 AM bridges the CCR verdicts to git: the 8:30 AM CCR routine writes `morning_verdicts_ccr.json` to a Google Drive folder (GitHub push is blocked from the CCR container), and this script reads it via the service account, writes `morning_verdicts.json`, and commits + pushes so the 9:35 AM engine picks up fresh verdicts. Drive folder: `12_v9m-kyzN4KrUMCXdObQlTEkUBqM7OP` (owned by pete.torres.375@gmail.com, shared with `sheets-bot@sheets-automation-495422.iam.gserviceaccount.com`). Falls back to Google Sheet "Verdicts" tab if Drive file not found. Log: `verdicts.log`.
 
-Logs: `engine.log` and `intraday.log` in the repo root.
+Both engine crons do `git pull` before running. The engine needs it to pick up the latest `morning_verdicts.json`; the intraday cron needs it so code changes pushed after 9:35 AM the previous day are picked up before the scanner runs (the intraday cron runs one minute before the engine cron, so without its own pull it would always lag a full day behind).
+
+Logs: `engine.log`, `intraday.log`, `verdicts.log` in the repo root.
 
 **Note:** The CCR swing engine routine (`trig_01S594UwnSLYX9HNtNZmeXgG`) is **disabled** — it could never connect to Alpaca from the sandbox. The local cron is the sole execution path.
 
@@ -255,7 +258,9 @@ Added 2026-06-04. Fully automated Opening Range Breakout engine that runs alongs
 
 **Strategy:** 5-minute ORB — entry on break above first 5-min candle high, stop at ORB low, scale out half at 2:1, trail remaining at 25% of max gain above entry
 
-**Automation:** Cron runs `run_intraday.py` at 9:34 AM ET weekdays. Scanner finds gap 5%+ candidates with 2x+ pace-adjusted rel volume (per-minute rate vs. historical average, not raw cumulative) and float ≤ `MAX_FLOAT_M` shares (default 20M, set via env var — low-float focus for bigger moves on volume). Float data from yfinance `floatShares`; symbols with no float data pass through. Set `MAX_FLOAT_M=0` in `.env` to disable. CCR routine (`trig_01TX4CDGSGMLscLLgtkgeKAr`) runs at 9:15 AM ET to print a pre-market news briefing on candidates.
+**Automation:** Cron runs `run_intraday.py` at 9:34 AM ET weekdays. Scanner finds gap 5%+ candidates with 2x+ pace-adjusted rel volume (per-minute rate vs. historical average, not raw cumulative) and float ≤ `MAX_FLOAT_M` shares (default 100M as of 2026-06-25, raised from 20M which was too restrictive — filtered all candidates on most days). Float data from yfinance `floatShares`; symbols with no float data pass through. Set `MAX_FLOAT_M=0` in `.env` to disable. CCR routine (`trig_01TX4CDGSGMLscLLgtkgeKAr`) runs at 9:15 AM ET to print a pre-market news briefing on candidates.
+
+**Intraday engine fixes (2026-06-25):** ORB entries now use bracket orders (atomic entry + stop + target in one request) instead of a separate stop placed after fill. Alpaca's wash-trade guard rejected the separate stop with "use complex orders" — bracket orders are immune. A lockfile (`intraday.lock`) prevents simultaneous engine instances; duplicate runs were causing double/triple position sizing (WAVE 2026-06-25: 333 shares from 3 concurrent instances instead of 111).
 
 **Performance gate:** After 20+ trades, pull any strategy below 45% win rate. Track results in `intraday_trades` and `intraday_daily` journal tables.
 
@@ -269,7 +274,7 @@ Automates portfolio restructuring in one step. Given a `--target` list:
 
 Use `--dry-run` to preview without placing orders. Built 2026-06-04 to reduce manual workflow.
 
-## Current focused universe (as of 2026-06-24)
+## Current focused universe (as of 2026-06-25)
 
 Active portfolio: **BTI, CSCO, F, NOK**. `MAX_OPEN_POSITIONS=5` — 4/5 (1 slot open).
 
@@ -277,10 +282,10 @@ Active portfolio: **BTI, CSCO, F, NOK**. `MAX_OPEN_POSITIONS=5` — 4/5 (1 slot 
 |---|---|---|
 | BTI | $59.82 | British American Tobacco. Dividend momentum. 17 shares. Stop $56.98 (HELD), target $65.52. |
 | CSCO | $121.04 | Cisco. EMA pullback. 7 shares. Stop $113.98 (HELD), target $133.13. Slightly offside. |
-| F | $14.37 | Ford. EMA pullback. 54 shares. Stop $13.34 (HELD), target $16.07. |
+| F | $14.37 | Ford. EMA pullback. 54 shares. Stop $13.34 (HELD), target $16.07. Offside, holding above stop. |
 | NOK | $13.65 | Nokia. EMA pullback. 35 shares. Stop $12.26 (HELD), target $16.46. Entered 2026-06-18. |
 
-Recently closed: RKLB stopped out 2026-06-24 at $91.56 (3 shares, entry $109.24, −$53.03, ~−1.09R; gapped through stop on broad market selloff — SQQQ +9% on the day; trailed stop was standalone, not bracket leg, so reconciler recorded as manual and was manually corrected). INTC stopped out 2026-06-23 at $131.63 (3 shares, entry $120.70, +$32.79, ~+0.72R; trail-ratcheted stop hit at market open in Nasdaq selloff). SPCX stopped out 2026-06-22 at $161.61 (2 shares, entry $184.31, −$45.40, ~-1.0R; stop triggered after-hours 6:59 PM ET on SpaceX bond-issuance selloff). GOOG stopped out 2026-06-22 at $350.59 (6 shares, ~-1.0R). SPCX stopped out 2026-06-16 at $196.30 (+$46.72, +1.02R; IPO re-entry, trail stop hit 3:47 PM ET). GRAB EOD close 2026-06-16 at $3.52 (-$13.15, -0.25R, ORB intraday). F market sell 2026-06-16 at $14.62 (-$29.89, -0.67R, one-shot cron). UBXG stopped out 2026-06-12 at $7.75 (+$36.92, ORB intraday). SPCX target hit 2026-06-12 at $165.64 (+$98.98, SpaceX IPO trade, ~1.87R). GOOG stopped out 2026-06-11 at $344.36 (~-1.0R). TGTX hit target +$88.76 (+1.52R) on 2026-06-04. KEEL stopped out -$52.36 (-1.00R) on 2026-06-04. LEGN manual close $0 on 2026-06-04. IREN stopped out 2026-06-04. LUNR stopped out 2026-06-04. VALE stopped out 2026-06-04 at $15.84.
+Recently closed: WAVE stopped out 2026-06-25 at $9.70 (ORB intraday; 333 shares filled due to duplicate engine instances running simultaneously — lockfile + bracket order fix applied same day). OUST stopped out 2026-06-25 at $41.20 (29 shares, ORB intraday, −$58, ~−1.0R). RKLB stopped out 2026-06-24 at $91.56 (3 shares, entry $109.24, −$53.03, ~−1.09R; gapped through stop on broad market selloff — SQQQ +9% on the day; trailed stop was standalone, not bracket leg, so reconciler recorded as manual and was manually corrected). INTC stopped out 2026-06-23 at $131.63 (3 shares, entry $120.70, +$32.79, ~+0.72R; trail-ratcheted stop hit at market open in Nasdaq selloff). SPCX stopped out 2026-06-22 at $161.61 (2 shares, entry $184.31, −$45.40, ~-1.0R; stop triggered after-hours 6:59 PM ET on SpaceX bond-issuance selloff). GOOG stopped out 2026-06-22 at $350.59 (6 shares, ~-1.0R). SPCX stopped out 2026-06-16 at $196.30 (+$46.72, +1.02R; IPO re-entry, trail stop hit 3:47 PM ET). GRAB EOD close 2026-06-16 at $3.52 (-$13.15, -0.25R, ORB intraday). F market sell 2026-06-16 at $14.62 (-$29.89, -0.67R, one-shot cron). UBXG stopped out 2026-06-12 at $7.75 (+$36.92, ORB intraday). SPCX target hit 2026-06-12 at $165.64 (+$98.98, SpaceX IPO trade, ~1.87R). GOOG stopped out 2026-06-11 at $344.36 (~-1.0R). TGTX hit target +$88.76 (+1.52R) on 2026-06-04. KEEL stopped out -$52.36 (-1.00R) on 2026-06-04. LEGN manual close $0 on 2026-06-04. IREN stopped out 2026-06-04. LUNR stopped out 2026-06-04. VALE stopped out 2026-06-04 at $15.84.
 
 ## Environment variables (.env)
 
