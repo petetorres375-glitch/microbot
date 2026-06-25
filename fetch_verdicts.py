@@ -61,8 +61,7 @@ def fetch_from_drive() -> dict | None:
             "https://www.googleapis.com/drive/v3/files",
             headers=headers,
             params={
-                "q": (f"name='{DRIVE_FILE_NAME}' and "
-                      f"'{DRIVE_FOLDER_ID}' in parents and trashed=false"),
+                "q": f"name='{DRIVE_FILE_NAME}' and trashed=false",
                 "orderBy": "modifiedTime desc",
                 "pageSize": 1,
                 "fields": "files(id,name,modifiedTime)",
