@@ -1,15 +1,21 @@
 """
 fetch_verdicts.py
 -----------------
-Reads morning_verdicts from the Google Sheet "Verdicts" tab,
-writes morning_verdicts.json, and commits + pushes.
+Reads morning verdicts written by the CCR container and applies them locally.
+
+The CCR container cannot push to GitHub (403 proxy). Instead it writes
+morning_verdicts_ccr.json to a Google Drive folder using its Drive MCP tools.
+This script reads that file via the service account, writes morning_verdicts.json,
+and commits + pushes — acting as the bridge from CCR → git.
+
+Sources tried in order:
+  1. Google Drive folder (primary — written by CCR routine via Drive MCP)
+  2. Google Sheet "Verdicts" tab (fallback)
 
 Run daily at 8:50 AM ET (after the 8:30 AM CCR analysis completes).
-The CCR container cannot push to GitHub, so it writes verdicts to the
-Verdicts tab instead. This script is the bridge that gets them into git.
 
 Usage:
-    python fetch_verdicts.py          # fetch + commit + push
+    python fetch_verdicts.py            # fetch + commit + push
     python fetch_verdicts.py --dry-run  # print only, no write/commit
 """
 from __future__ import annotations
@@ -28,25 +34,78 @@ except Exception:
     pass
 
 VERDICTS_FILE = "morning_verdicts.json"
+DRIVE_FOLDER_ID = "12_v9m-kyzN4KrUMCXdObQlTEkUBqM7OP"
+DRIVE_FILE_NAME = "morning_verdicts_ccr.json"
 
 
-def _sheet():
-    import gspread
-    from google.oauth2.service_account import Credentials
-    creds = Credentials.from_service_account_file(
+def _drive_creds():
+    import google.oauth2.service_account as sa
+    return sa.Credentials.from_service_account_file(
         os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "service_account.json"),
-        scopes=[
-            "https://www.googleapis.com/auth/spreadsheets",
-            "https://www.googleapis.com/auth/drive",
-        ],
+        scopes=["https://www.googleapis.com/auth/drive.readonly"],
     )
-    gc = gspread.authorize(creds)
-    return gc.open_by_key(os.getenv("GSHEET_ID")).worksheet("Verdicts")
 
 
-def fetch() -> dict | None:
+def fetch_from_drive() -> dict | None:
+    """Read the most recent verdicts file from the CCR Google Drive folder."""
     try:
-        ws = _sheet()
+        import google.auth.transport.requests
+        import requests as http
+
+        creds = _drive_creds()
+        creds.refresh(google.auth.transport.requests.Request())
+        headers = {"Authorization": f"Bearer {creds.token}"}
+
+        # Find the most recently modified verdicts file in the folder
+        resp = http.get(
+            "https://www.googleapis.com/drive/v3/files",
+            headers=headers,
+            params={
+                "q": (f"name='{DRIVE_FILE_NAME}' and "
+                      f"'{DRIVE_FOLDER_ID}' in parents and trashed=false"),
+                "orderBy": "modifiedTime desc",
+                "pageSize": 1,
+                "fields": "files(id,name,modifiedTime)",
+            },
+        )
+        resp.raise_for_status()
+        files = resp.json().get("files", [])
+        if not files:
+            print("[fetch_verdicts] No Drive verdicts file found yet.")
+            return None
+
+        file_id = files[0]["id"]
+        content_resp = http.get(
+            f"https://www.googleapis.com/drive/v3/files/{file_id}?alt=media",
+            headers=headers,
+        )
+        content_resp.raise_for_status()
+        data = content_resp.json()
+
+        if data.get("date") != date.today().isoformat():
+            print(f"[fetch_verdicts] Drive file dated {data.get('date')}, not today.")
+            return None
+
+        return data
+    except Exception as e:
+        print(f"[fetch_verdicts] Drive read failed: {e}")
+        return None
+
+
+def fetch_from_sheet() -> dict | None:
+    """Fallback: read verdicts from the Google Sheet Verdicts tab."""
+    try:
+        import gspread
+        from google.oauth2.service_account import Credentials
+        creds = Credentials.from_service_account_file(
+            os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "service_account.json"),
+            scopes=[
+                "https://www.googleapis.com/auth/spreadsheets",
+                "https://www.googleapis.com/auth/drive",
+            ],
+        )
+        gc = gspread.authorize(creds)
+        ws = gc.open_by_key(os.getenv("GSHEET_ID")).worksheet("Verdicts")
         rows = ws.get_all_values()
     except Exception as e:
         print(f"[fetch_verdicts] Sheet read failed: {e}")
@@ -65,16 +124,25 @@ def fetch() -> dict | None:
         return None
 
     if sheet_date != date.today().isoformat():
-        print(f"[fetch_verdicts] Sheet verdicts are from {sheet_date}, not today. Skipping.")
+        print(f"[fetch_verdicts] Sheet verdicts dated {sheet_date}, not today.")
         return None
 
     try:
-        verdicts = json.loads(verdicts_json)
+        return {"date": sheet_date, "verdicts": json.loads(verdicts_json)}
     except json.JSONDecodeError as e:
         print(f"[fetch_verdicts] Bad JSON in sheet: {e}")
         return None
 
-    return {"date": sheet_date, "verdicts": verdicts}
+
+def fetch() -> dict | None:
+    result = fetch_from_drive()
+    if result:
+        print("[fetch_verdicts] Source: Google Drive")
+        return result
+    result = fetch_from_sheet()
+    if result:
+        print("[fetch_verdicts] Source: Google Sheet (fallback)")
+    return result
 
 
 def main():
@@ -84,6 +152,7 @@ def main():
 
     result = fetch()
     if result is None:
+        print("[fetch_verdicts] No fresh verdicts found. Nothing to apply.")
         sys.exit(1)
 
     clean = sum(1 for v in result["verdicts"].values() if v == "CLEAN")
