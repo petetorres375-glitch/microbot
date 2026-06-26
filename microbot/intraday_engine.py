@@ -434,27 +434,29 @@ class IntradayEngine:
 
     def _check_stop_fills(self):
         """Detect when Alpaca filled a stop order and record the closed trade."""
-        if not any(s.in_trade for s in self.states.values()):
-            return
-
-        try:
-            open_ids = {
-                str(o.id)
-                for o in self.trading.get_orders(
-                    filter=GetOrdersRequest(status="open")
-                )
-            }
-        except Exception:
-            return
-
+        # Fetch each stop leg directly by ID — bracket/OCO stop legs are HELD,
+        # not OPEN, so get_orders(status="open") would never return them and would
+        # falsely trigger a "stop filled" conclusion every single poll iteration.
         for sym, s in self.states.items():
             if not s.in_trade or s.closed or not s.stop_order_id:
                 continue
-            if s.stop_order_id not in open_ids:
-                # Stop was filled (we only clear stop_order_id before intentional cancels)
-                exit_price = s.stop_price
+            try:
+                stop_order = self.trading.get_order_by_id(s.stop_order_id)
+                status = str(stop_order.status).lower()
+            except Exception as e:
+                print(f"  stop check failed {sym}: {e}")
+                continue
+
+            if "filled" in status or "partially_filled" in status:
+                exit_price = float(stop_order.filled_avg_price or s.stop_price)
                 s.realized_pnl += s.qty_remaining * (exit_price - s.entry_price)
                 self._finalize(sym, exit_price, "stop")
+            elif any(x in status for x in ("canceled", "expired", "replaced")):
+                # Alpaca canceled the leg (e.g., DAY expiry, manual cancel) —
+                # clear the ID so we stop looking, but don't mark the position closed
+                print(f"  stop leg orphaned {sym} ({status}) — monitoring price only")
+                s.stop_order_id = ""
+            # HELD / NEW / ACCEPTED / PENDING_NEW → still active, nothing to do
 
     def _finalize(self, sym: str, exit_price: float, reason: str):
         s = self.states[sym]
@@ -469,7 +471,7 @@ class IntradayEngine:
         half_price = (s.target_price if s.half_exited else None)
         self._log_closed(sym, exit_price, reason, total_pnl, r, half_price)
 
-    def _close_position(self, sym: str, price: float, reason: str):
+    def _close_position(self, sym: str, price: float, reason: str) -> bool:
         s = self.states[sym]
         self._cancel_stop(s)
         if s.qty_remaining >= 1:
@@ -481,14 +483,17 @@ class IntradayEngine:
                 ))
                 s.realized_pnl += s.qty_remaining * (price - s.entry_price)
             except Exception as e:
-                print(f"  close failed {sym}: {e}")
+                print(f"  close failed {sym}: {e} — position NOT marked closed")
+                return False
         self._finalize(sym, price, reason)
+        return True
 
     def _eod_close_all(self, prices: Dict[str, float]):
         print("3:55 PM — closing all intraday positions")
         for sym, s in self.states.items():
             if s.in_trade and not s.closed:
-                self._close_position(sym, prices.get(sym, s.entry_price), "eod_close")
+                if not self._close_position(sym, prices.get(sym, s.entry_price), "eod_close"):
+                    print(f"  EMERGENCY: {sym} could not be closed — check Alpaca manually")
 
     # ---- main loop ----
 
