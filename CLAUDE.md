@@ -28,7 +28,7 @@ The bot's job is to:
 ## Universes
 
 - **Main universe** (`UNIVERSE` env var): momentum/growth stocks affordable on ~$500
-- **Dividend universe** (`DIVIDEND_UNIVERSE`): income-focused, lower-beta names (VZ, MO, BTI, ET, AGNC, NLY, EPD, KMI, STAG, ABBV, CVX, O) — toggle with `INCLUDE_DIVIDEND_STOCKS`
+- **Dividend universe** (`DIVIDEND_UNIVERSE`): income-focused, lower-beta names — trimmed 2026-06-26 to 5 backtest-positive names only: **KMI, BTI, ET, MO, EPD**. Dropped VZ, AGNC, NLY, STAG (negative expectancy), CVX (flat), ABBV (−42R max drawdown crushes score), O (< 8 backtest trades). Set via `.env` override; toggle with `INCLUDE_DIVIDEND_STOCKS`.
 - **Split universe** (`SPLIT_UNIVERSE`): post-split momentum names now affordable (NVDA, TSLA, AMZN, GOOG, SHOP) — toggle with `INCLUDE_SPLIT_STOCKS`
 - **IPO universe** (`IPO_UNIVERSE`): recent IPOs with limited history, scanned with a shorter 180-day lookback — toggle with `INCLUDE_IPO_STOCKS`, tune lookback with `IPO_LOOKBACK_DAYS`. Auto-discovered via SEC EDGAR 8-A12B filings + Alpaca validation; cached in DB, rescanned every 24h. Manually add extra tickers via `IPO_UNIVERSE=`.
 
