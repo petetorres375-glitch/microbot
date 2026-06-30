@@ -48,9 +48,9 @@ def main():
     client = TradingClient(settings.api_key, settings.api_secret, paper=paper)
 
     acct = client.get_account()
-    equity = float(acct.equity)
+    equity = settings.starting_equity if paper else float(acct.equity)
     budget = equity * 0.01
-    print(f"Account equity: ${equity:,.2f} | 1%% risk budget: ${budget:.2f}")
+    print(f"{'Paper' if paper else 'Live'} equity: ${equity:,.2f} | 1%% risk budget: ${budget:.2f}")
     print(f"{'[DRY RUN] ' if args.dry_run else ''}Buying {args.qty} shares of {SYMBOL} at market")
     print(f"Stop: {args.stop_pct}% below fill | Target: 2:1\n")
 

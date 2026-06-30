@@ -196,6 +196,7 @@ def run_once(research_only: bool = False, push_sheets: bool = False):
         try:
             order = broker.submit_bracket(sized)
             journal.log_order(sized, str(order.id), str(order.status))
+            held.add(s["symbol"])  # prevent duplicate signal from same symbol this run
             print(f"  AUTO(CLEAN) {sized.qty}x {s['symbol']} @~{s['entry']} "
                   f"stop {s['stop']} target {s['target']} (risk ${sized.dollar_risk:.2f})")
         except Exception as e:
