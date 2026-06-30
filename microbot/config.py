@@ -45,7 +45,7 @@ class Settings:
     # --- Universe: which stocks to scan. Keep it liquid + lower-priced for $500. ---
     universe: List[str] = field(default_factory=lambda: os.getenv(
         "UNIVERSE",
-        "F,SOFI,PLTR,NIO,AMD,INTC,T,BAC,PFE,CSCO,HOOD,RIVN,SNAP,UBER,WBD,GRAB,VALE,RIG,CCL,KVUE,RKLB,AMKR,LION"
+        "F,SOFI,PLTR,NIO,AMD,INTC,T,BAC,PFE,CSCO,HOOD,RIVN,SNAP,UBER,WBD,GRAB,VALE,RIG,CCL,KVUE,RKLB,AMKR,LION,SPCX"
     ).split(","))
 
     # --- Dividend universe: income-focused, lower-beta names. ---
@@ -130,7 +130,7 @@ class Settings:
         # REIT
         "NLY": "reit", "AGNC": "reit", "O": "reit", "STAG": "reit",
         # industrial/space
-        "RKLB": "industrial", "LUNR": "industrial",
+        "RKLB": "industrial", "LUNR": "industrial", "SPCX": "industrial",
         # financials
         "BAC": "financials",
         # consumer discretionary
