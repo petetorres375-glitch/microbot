@@ -30,7 +30,7 @@ The bot's job is to:
 - **Main universe** (`UNIVERSE` env var): momentum/growth stocks affordable on ~$500
 - **Dividend universe** (`DIVIDEND_UNIVERSE`): income-focused, lower-beta names — trimmed 2026-06-26 to 5 backtest-positive names only: **KMI, BTI, ET, MO, EPD**. Dropped VZ, AGNC, NLY, STAG (negative expectancy), CVX (flat), ABBV (−42R max drawdown crushes score), O (< 8 backtest trades). Set via `.env` override; toggle with `INCLUDE_DIVIDEND_STOCKS`.
 - **Split universe** (`SPLIT_UNIVERSE`): post-split momentum names now affordable (NVDA, TSLA, AMZN, GOOG, SHOP) — toggle with `INCLUDE_SPLIT_STOCKS`
-- **IPO universe** (`IPO_UNIVERSE`): recent IPOs with limited history, scanned with a shorter 180-day lookback — toggle with `INCLUDE_IPO_STOCKS`, tune lookback with `IPO_LOOKBACK_DAYS`. Auto-discovered via SEC EDGAR 8-A12B filings + Alpaca validation; cached in DB, rescanned every 24h. Manually add extra tickers via `IPO_UNIVERSE=`.
+- **IPO universe** (`IPO_UNIVERSE`): recent IPOs with limited history, scanned with a shorter 180-day lookback — toggle with `INCLUDE_IPO_STOCKS`, tune lookback with `IPO_LOOKBACK_DAYS`. Auto-discovered via SEC EDGAR 8-A12B filings + Alpaca validation; cached in DB, rescanned every 24h. Manually add extra tickers via `IPO_UNIVERSE=`. Current manual addition: **SPCX** (SpaceX, IPO 2026-06-12). SPCX is also a personal long-term hold (6 shares, OCO stop + trail.py) — not a bot swing trade.
 
 ## Strategies
 
@@ -278,16 +278,19 @@ Use `--dry-run` to preview without placing orders. Built 2026-06-04 to reduce ma
 
 ## Current focused universe (as of 2026-06-29)
 
-Active portfolio: **BTI, F, FCEL, OUST**. `MAX_OPEN_POSITIONS=8` — 4/8.
+Active portfolio: **BTI, CCL, CSCO, F, FCEL, SPCX, UMAC**. `MAX_OPEN_POSITIONS=8` — 7/8.
 
 | Symbol | Entry | Notes |
 |---|---|---|
-| BTI | $59.82 | British American Tobacco. Dividend momentum. 17 shares. Stop $61.47 (trail-ratcheted, HELD in OCO), target $65.52. +0.9R intraday — risk-free hold. |
-| F | $14.37 | Ford. EMA pullback. 54 shares. Stop $13.34 (HELD), target $16.07. −0.2R, holding above stop. |
-| FCEL | $29.60 | FuelCell Energy. New ORB entry 2026-06-29. 11 shares. Stop $25.35, target $37.91 (bracket). Near entry. |
-| OUST | $48.86 | Ouster. New ORB entry 2026-06-29. 9 shares. Stop $43.49, target $59.60 (bracket). +0.3R. |
+| BTI | $59.82 | British American Tobacco. Dividend momentum. 17 shares. Stop $61.47 (trail-ratcheted, OCO), target $65.52. +4.5R intraday — risk-free hold. UBS buyback started 2026-06-30. |
+| CCL | $28.60 | Carnival Corp. EMA pullback. 25 shares. Stop $26.63, target $32.53. New engine entry 2026-06-30. |
+| CSCO | $117.88 | Cisco. Trend momentum. 8 shares. Stop $111.70, target $129.84. Re-entry 2026-06-29 after hours (GTC filled at open 2026-06-30). |
+| F | $14.37 | Ford. EMA pullback. 54 shares. Stop $13.34 (HELD), target $16.07. −1.4%, watch stop. |
+| FCEL | $29.60 | FuelCell Energy. ORB entry 2026-06-29. 11 shares. Stop $25.35, target $37.91 (bracket). +24% as of 2026-06-30 open. |
+| SPCX | $163.62 | SpaceX. Long-term personal hold. 6 shares. Stop $155.44 (OCO GTC). Trail.py ratchets at 1R. No fixed target. IPO 2026-06-12. |
+| UMAC | $21.22 | Unusual Machines. ORB entry 2026-06-30. 49 shares. Stop $20.21, target $23.24. +6.6% as of 10 AM ET. |
 
-Recently closed: NOK stopped out 2026-06-29 at $12.25 (35 shares, entry $13.65, ~−$49, ~−1.0R). FCEL overnight OCO target hit 2026-06-29 at $29.43 (15 shares, entry $22.47, +$105, +1.0R; held overnight on 380 MW data center catalyst). CSCO stopped out 2026-06-26 at $114.18 (7 shares, entry $120.36, −$43.25, ~−0.97R; bracket stop leg triggered 3:50 PM ET). SDOT intraday ORB target hit 2026-06-26 at $16.11 (25 shares, entry $12.24, +$96.69). WAVE stopped out 2026-06-25 at $9.70 (ORB intraday; 333 shares filled due to duplicate engine instances — lockfile + bracket order fix applied same day). OUST stopped out 2026-06-25 at $41.20 (29 shares, ORB intraday, −$58, ~−1.0R). RKLB stopped out 2026-06-24 at $91.56 (3 shares, entry $109.24, −$53.03, ~−1.09R; gapped through stop on broad market selloff). INTC stopped out 2026-06-23 at $131.63 (3 shares, entry $120.70, +$32.79, ~+0.72R). SPCX stopped out 2026-06-22 at $161.61 (2 shares, entry $184.31, −$45.40, ~-1.0R; after-hours). GOOG stopped out 2026-06-22 at $350.59 (6 shares, ~-1.0R). SPCX stopped out 2026-06-16 at $196.30 (+$46.72, +1.02R). GRAB EOD close 2026-06-16 at $3.52 (-$13.15, -0.25R, ORB). F market sell 2026-06-16 at $14.62 (-$29.89, -0.67R). UBXG stopped out 2026-06-12 at $7.75 (+$36.92, ORB). SPCX target hit 2026-06-12 at $165.64 (+$98.98, ~1.87R). GOOG stopped out 2026-06-11 at $344.36 (~-1.0R). TGTX hit target +$88.76 (+1.52R) on 2026-06-04. KEEL stopped out -$52.36 (-1.00R) on 2026-06-04. LEGN manual close $0 on 2026-06-04. IREN stopped out 2026-06-04. LUNR stopped out 2026-06-04. VALE stopped out 2026-06-04 at $15.84.
+Recently closed: OUST EOD close 2026-06-29 at $54.10 (9 shares, entry $48.86, +$47, ~+1.0R; ORB hard close 3:55 PM). NOK stopped out 2026-06-29 at $12.25 (35 shares, entry $13.65, ~−$49, ~−1.0R). FCEL overnight OCO target hit 2026-06-29 at $29.43 (15 shares, entry $22.47, +$105, +1.0R; held overnight on 380 MW data center catalyst). CSCO stopped out 2026-06-26 at $114.18 (7 shares, entry $120.36, −$43.25, ~−0.97R). SDOT intraday ORB target hit 2026-06-26 at $16.11 (25 shares, entry $12.24, +$96.69). WAVE stopped out 2026-06-25 at $9.70 (ORB intraday; 333 shares filled due to duplicate engine instances — lockfile + bracket order fix applied same day). OUST stopped out 2026-06-25 at $41.20 (29 shares, ORB intraday, −$58, ~−1.0R). RKLB stopped out 2026-06-24 at $91.56 (3 shares, entry $109.24, −$53.03, ~−1.09R; gapped through stop on broad market selloff). INTC stopped out 2026-06-23 at $131.63 (3 shares, entry $120.70, +$32.79, ~+0.72R). SPCX stopped out 2026-06-22 at $161.61 (2 shares, entry $184.31, −$45.40, ~-1.0R; after-hours). GOOG stopped out 2026-06-22 at $350.59 (6 shares, ~-1.0R). SPCX stopped out 2026-06-16 at $196.30 (+$46.72, +1.02R). GRAB EOD close 2026-06-16 at $3.52 (-$13.15, -0.25R, ORB). F market sell 2026-06-16 at $14.62 (-$29.89, -0.67R). UBXG stopped out 2026-06-12 at $7.75 (+$36.92, ORB). SPCX target hit 2026-06-12 at $165.64 (+$98.98, ~1.87R). GOOG stopped out 2026-06-11 at $344.36 (~-1.0R). TGTX hit target +$88.76 (+1.52R) on 2026-06-04. KEEL stopped out -$52.36 (-1.00R) on 2026-06-04. LEGN manual close $0 on 2026-06-04. IREN stopped out 2026-06-04. LUNR stopped out 2026-06-04. VALE stopped out 2026-06-04 at $15.84.
 
 ## Environment variables (.env)
 
@@ -296,7 +299,7 @@ ALPACA_API_KEY=...
 ALPACA_API_SECRET=...
 LIVE_TRADING=false
 STARTING_EQUITY=5000
-MAX_OPEN_POSITIONS=5
+MAX_OPEN_POSITIONS=8
 INCLUDE_DIVIDEND_STOCKS=true
 INCLUDE_SPLIT_STOCKS=true
 GSHEET_ID=...
