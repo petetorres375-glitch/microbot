@@ -56,15 +56,20 @@ def fetch_from_drive() -> dict | None:
         creds.refresh(google.auth.transport.requests.Request())
         headers = {"Authorization": f"Bearer {creds.token}"}
 
-        # Find the most recently modified verdicts file in the folder
+        # Search by name within the specific folder.
+        # includeItemsFromAllDrives + supportsAllDrives allows the service account
+        # to find files owned by the user but placed in a shared folder.
         resp = http.get(
             "https://www.googleapis.com/drive/v3/files",
             headers=headers,
             params={
-                "q": f"name='{DRIVE_FILE_NAME}' and trashed=false",
+                "q": f"name='{DRIVE_FILE_NAME}' and '{DRIVE_FOLDER_ID}' in parents",
                 "orderBy": "modifiedTime desc",
                 "pageSize": 1,
                 "fields": "files(id,name,modifiedTime)",
+                "includeItemsFromAllDrives": "true",
+                "supportsAllDrives": "true",
+                "corpora": "allDrives",
             },
         )
         resp.raise_for_status()
