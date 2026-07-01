@@ -30,7 +30,7 @@ The bot's job is to:
 - **Main universe** (`UNIVERSE` env var): momentum/growth stocks affordable on ~$500
 - **Dividend universe** (`DIVIDEND_UNIVERSE`): income-focused, lower-beta names — trimmed 2026-06-26 to 5 backtest-positive names only: **KMI, BTI, ET, MO, EPD**. Dropped VZ, AGNC, NLY, STAG (negative expectancy), CVX (flat), ABBV (−42R max drawdown crushes score), O (< 8 backtest trades). Set via `.env` override; toggle with `INCLUDE_DIVIDEND_STOCKS`.
 - **Split universe** (`SPLIT_UNIVERSE`): post-split momentum names now affordable (NVDA, TSLA, AMZN, GOOG, SHOP) — toggle with `INCLUDE_SPLIT_STOCKS`
-- **IPO universe** (`IPO_UNIVERSE`): recent IPOs with limited history, scanned with a shorter 180-day lookback — toggle with `INCLUDE_IPO_STOCKS`, tune lookback with `IPO_LOOKBACK_DAYS`. Auto-discovered via SEC EDGAR 8-A12B filings + Alpaca validation; cached in DB, rescanned every 24h. Manually add extra tickers via `IPO_UNIVERSE=`. Current manual addition: **SPCX** (SpaceX, IPO 2026-06-12). SPCX is also a personal long-term hold (6 shares, OCO stop + trail.py) — not a bot swing trade.
+- **IPO universe** (`IPO_UNIVERSE`): recent IPOs with limited history, scanned with a shorter 180-day lookback — toggle with `INCLUDE_IPO_STOCKS`, tune lookback with `IPO_LOOKBACK_DAYS`. Auto-discovered via SEC EDGAR 8-A12B filings + Alpaca validation; cached in DB, rescanned every 24h. Manually add extra tickers via `IPO_UNIVERSE=`. Current manual addition: **SPCX** (SpaceX, IPO 2026-06-12). SPCX is also a personal long-term hold — not a bot swing trade. Stopped out 2026-07-01 at $155.44 (entry $163.62, 6 shares, −$49.08). `watch_spcx.py` (cron, same cadence as `trail.py`) watches for a reclaim of $163.62 and re-buys automatically, sized off `starting_equity` with a 5% OCO stop — see "SPCX Long-Term Hold" section below.
 
 ## Strategies
 
@@ -76,11 +76,16 @@ SHELL=/bin/bash
 36 9 * * 1-5 cd /home/lenovo-home/microbot && source .venv/bin/activate && python -m microbot.trail >> /home/lenovo-home/microbot/trail.log 2>&1
 30 10-15 * * 1-5 cd /home/lenovo-home/microbot && source .venv/bin/activate && python -m microbot.trail >> /home/lenovo-home/microbot/trail.log 2>&1
 0 16 * * 1-5 cd /home/lenovo-home/microbot && source .venv/bin/activate && python -m microbot.trail >> /home/lenovo-home/microbot/trail.log 2>&1
+36 9 * * 1-5 cd /home/lenovo-home/microbot && source .venv/bin/activate && python watch_spcx.py >> /home/lenovo-home/microbot/watch_spcx.log 2>&1
+30 10-15 * * 1-5 cd /home/lenovo-home/microbot && source .venv/bin/activate && python watch_spcx.py >> /home/lenovo-home/microbot/watch_spcx.log 2>&1
+0 16 * * 1-5 cd /home/lenovo-home/microbot && source .venv/bin/activate && python watch_spcx.py >> /home/lenovo-home/microbot/watch_spcx.log 2>&1
 ```
 
 **Important:** `SHELL=/bin/bash` is required — cron defaults to `/bin/sh` (dash on Ubuntu) which does not support `source`. Without it, both jobs silently fail at the activate step and never run.
 
 The `fetch_verdicts.py` cron at 8:50 AM bridges the CCR verdicts to git: the 8:30 AM CCR routine writes `morning_verdicts_ccr.json` to a Google Drive folder (GitHub push is blocked from the CCR container), and this script reads it via the service account, writes `morning_verdicts.json`, and commits + pushes so the 9:35 AM engine picks up fresh verdicts. Drive folder: `12_v9m-kyzN4KrUMCXdObQlTEkUBqM7OP` (owned by pete.torres.375@gmail.com, shared with `sheets-bot@sheets-automation-495422.iam.gserviceaccount.com`). Falls back to Google Sheet "Verdicts" tab if Drive file not found. Log: `verdicts.log`.
+
+`watch_spcx.py` (added 2026-07-01, same cadence as `trail.py` above) watches for SPCX to reclaim a trigger price and re-buys — see "SPCX Long-Term Hold" section below. Log: `watch_spcx.log`.
 
 Both engine crons do `git pull` before running. The engine needs it to pick up the latest `morning_verdicts.json`; the intraday cron needs it so code changes pushed after 9:35 AM the previous day are picked up before the scanner runs (the intraday cron runs one minute before the engine cron, so without its own pull it would always lag a full day behind).
 
@@ -276,21 +281,28 @@ Automates portfolio restructuring in one step. Given a `--target` list:
 
 Use `--dry-run` to preview without placing orders. Built 2026-06-04 to reduce manual workflow.
 
+## SPCX Long-Term Hold
+
+Personal long-term position, not a bot swing trade — the daily CCR verdicts and intraday moves don't apply to it. History: IPO 2026-06-12, several manual re-entries/stop-outs through June, last entry 2026-06-30 at $163.62 (6 shares, OCO stop $155.44). **Stopped out 2026-07-01 at $155.44** (−$49.08, ~−1.0R) — currently flat, no SPCX position held.
+
+Per user instruction (2026-07-01): watch for SPCX to reclaim the prior entry price and re-buy automatically rather than manually deciding. `watch_spcx.py` runs on the same cron cadence as `trail.py` (9:36 AM, hourly 10:30–3:30, 4:00 PM ET) and, once SPCX prints a verified real trade (size > 0, stamped today) at or above **$163.62**, buys back in — sized off `starting_equity` at 1% risk, 5% GTC stop below fill via OCO bracket, wide take-profit ceiling since `trail.py`'s 1R ratchet is the real exit. Skips if SPCX is already held, so repeated cron runs are idempotent. Log: `watch_spcx.log`.
+
 ## Current focused universe (as of 2026-07-01)
 
-Active portfolio: **CCL, CSCO, F, GOOG, SPCX**. `MAX_OPEN_POSITIONS=8` — 5/8. Market closed Fri Jul 4.
+Active portfolio: **CCL, CSCO, F, GOOG**. `MAX_OPEN_POSITIONS=8` — 4/8. Market closed Fri Jul 4.
 
 | Symbol | Entry | Notes |
 |---|---|---|
-| CCL | $28.60 | Carnival Corp. EMA pullback. 25 shares. Stop $26.63, target $32.53. Engine entry 2026-06-30. Currently $28.86, +$6.62 (+0.93%). |
-| CSCO | $117.88 | Cisco. Trend momentum. 8 shares. Stop $111.70, target $129.84. Re-entry 2026-06-29 (GTC filled 2026-06-30 open). Currently $116.46, −$11.36 (−1.21%). |
-| F | $14.37 | Ford. EMA pullback. 54 shares. Stop $13.34 (HELD), target $16.07. Currently $13.73, −$34.29 (−4.42%) — approaching stop. |
-| GOOG | $359.33 | Google. Trend momentum re-entry 2026-07-01 (prior entry stopped Jun 22 at −1R). 3 shares. Stop ~$341.60, target ~$391.49 (bracket). CLEAN verdict Jul 1. Engine ran late (Drive bridge delay) — executed manually 10:31 AM. Currently $356.24, −$9.27 (−0.86%). |
-| SPCX | $163.62 | SpaceX. Long-term personal hold. 6 shares. Stop $155.44 (OCO GTC). Trail.py ratchets at 1R. No fixed target. IPO 2026-06-12. Currently $161.71, −$11.49 (−1.17%). |
+| CCL | $28.60 | Carnival Corp. EMA pullback. 25 shares. Stop $26.63, target $32.53. Engine entry 2026-06-30. Currently $28.50, −$2.38 (−0.33%). |
+| CSCO | $117.88 | Cisco. Trend momentum. 8 shares. Stop $111.70, target $129.84. Re-entry 2026-06-29 (GTC filled 2026-06-30 open). Currently $116.75, −$9.04 (−0.96%). |
+| F | $14.37 | Ford. EMA pullback. 54 shares. Stop $13.34 (HELD), target $16.07. Currently $13.65, −$41.04 (−5.29%) — approaching stop. |
+| GOOG | $359.33 | Google. Trend momentum re-entry 2026-07-01 (prior entry stopped Jun 22 at −1R). 3 shares. Stop ~$341.60, target ~$391.49 (bracket). CLEAN verdict Jul 1. Engine ran late (Drive bridge delay) — executed manually 10:31 AM. Currently $356.80, −$7.59 (−0.70%). |
 
-Total unrealized P/L across open positions (as of 2026-07-01 ~1:49 PM ET): −$59.79.
+Total unrealized P/L across open positions (as of 2026-07-01 ~6:05 PM ET): −$60.05.
 
-Recently closed: FCEL OCO target hit 2026-07-01 at $33.10 (11 shares, entry $29.60, +$38.50, ~+1.3R — ORB re-entry from Jun 30 closed out same-week). BTI OCO stop filled 2026-07-01 at $61.01 (gapped through $61.47 trail stop; entry $59.82, 17 shares, +$20.23 — profitable exit on job-cut/guidance CAUTION news). UMAC ORB 2026-07-01 +$61.48 (49 shares, scaled out half at $23.24, stopped remainder at $21.74). OUST EOD close 2026-06-29 at $54.10 (9 shares, entry $48.86, +$47, ~+1.0R; ORB hard close 3:55 PM). NOK stopped out 2026-06-29 at $12.25 (35 shares, entry $13.65, ~−$49, ~−1.0R). FCEL overnight OCO target hit 2026-06-29 at $29.43 (15 shares, entry $22.47, +$105, +1.0R; held overnight on 380 MW data center catalyst). CSCO stopped out 2026-06-26 at $114.18 (7 shares, entry $120.36, −$43.25, ~−0.97R). SDOT intraday ORB target hit 2026-06-26 at $16.11 (25 shares, entry $12.24, +$96.69). WAVE stopped out 2026-06-25 at $9.70 (ORB intraday; 333 shares filled due to duplicate engine instances — lockfile + bracket order fix applied same day). OUST stopped out 2026-06-25 at $41.20 (29 shares, ORB intraday, −$58, ~−1.0R). RKLB stopped out 2026-06-24 at $91.56 (3 shares, entry $109.24, −$53.03, ~−1.09R; gapped through stop on broad market selloff). INTC stopped out 2026-06-23 at $131.63 (3 shares, entry $120.70, +$32.79, ~+0.72R). SPCX stopped out 2026-06-22 at $161.61 (2 shares, entry $184.31, −$45.40, ~-1.0R; after-hours). GOOG stopped out 2026-06-22 at $350.59 (6 shares, ~-1.0R). SPCX stopped out 2026-06-16 at $196.30 (+$46.72, +1.02R). GRAB EOD close 2026-06-16 at $3.52 (-$13.15, -0.25R, ORB). F market sell 2026-06-16 at $14.62 (-$29.89, -0.67R). UBXG stopped out 2026-06-12 at $7.75 (+$36.92, ORB). SPCX target hit 2026-06-12 at $165.64 (+$98.98, ~1.87R). GOOG stopped out 2026-06-11 at $344.36 (~-1.0R). TGTX hit target +$88.76 (+1.52R) on 2026-06-04. KEEL stopped out -$52.36 (-1.00R) on 2026-06-04. LEGN manual close $0 on 2026-06-04. IREN stopped out 2026-06-04. LUNR stopped out 2026-06-04. VALE stopped out 2026-06-04 at $15.84.
+SPCX (personal long-term hold, separate from the 4 positions above) stopped out 2026-07-01 at $155.44 — see "SPCX Long-Term Hold" section above.
+
+Recently closed: SPCX stopped out 2026-07-01 at $155.44 (6 shares, entry $163.62, −$49.08, ~−1.0R). FCEL OCO target hit 2026-07-01 at $33.10 (11 shares, entry $29.60, +$38.50, ~+1.3R — ORB re-entry from Jun 30 closed out same-week). BTI OCO stop filled 2026-07-01 at $61.01 (gapped through $61.47 trail stop; entry $59.82, 17 shares, +$20.23 — profitable exit on job-cut/guidance CAUTION news). UMAC ORB 2026-07-01 +$61.48 (49 shares, scaled out half at $23.24, stopped remainder at $21.74). OUST EOD close 2026-06-29 at $54.10 (9 shares, entry $48.86, +$47, ~+1.0R; ORB hard close 3:55 PM). NOK stopped out 2026-06-29 at $12.25 (35 shares, entry $13.65, ~−$49, ~−1.0R). FCEL overnight OCO target hit 2026-06-29 at $29.43 (15 shares, entry $22.47, +$105, +1.0R; held overnight on 380 MW data center catalyst). CSCO stopped out 2026-06-26 at $114.18 (7 shares, entry $120.36, −$43.25, ~−0.97R). SDOT intraday ORB target hit 2026-06-26 at $16.11 (25 shares, entry $12.24, +$96.69). WAVE stopped out 2026-06-25 at $9.70 (ORB intraday; 333 shares filled due to duplicate engine instances — lockfile + bracket order fix applied same day). OUST stopped out 2026-06-25 at $41.20 (29 shares, ORB intraday, −$58, ~−1.0R). RKLB stopped out 2026-06-24 at $91.56 (3 shares, entry $109.24, −$53.03, ~−1.09R; gapped through stop on broad market selloff). INTC stopped out 2026-06-23 at $131.63 (3 shares, entry $120.70, +$32.79, ~+0.72R). SPCX stopped out 2026-06-22 at $161.61 (2 shares, entry $184.31, −$45.40, ~-1.0R; after-hours). GOOG stopped out 2026-06-22 at $350.59 (6 shares, ~-1.0R). SPCX stopped out 2026-06-16 at $196.30 (+$46.72, +1.02R). GRAB EOD close 2026-06-16 at $3.52 (-$13.15, -0.25R, ORB). F market sell 2026-06-16 at $14.62 (-$29.89, -0.67R). UBXG stopped out 2026-06-12 at $7.75 (+$36.92, ORB). SPCX target hit 2026-06-12 at $165.64 (+$98.98, ~1.87R). GOOG stopped out 2026-06-11 at $344.36 (~-1.0R). TGTX hit target +$88.76 (+1.52R) on 2026-06-04. KEEL stopped out -$52.36 (-1.00R) on 2026-06-04. LEGN manual close $0 on 2026-06-04. IREN stopped out 2026-06-04. LUNR stopped out 2026-06-04. VALE stopped out 2026-06-04 at $15.84.
 
 ## Verdicts pipeline known issue (Drive bridge bug, 2026-07-01)
 
