@@ -276,21 +276,30 @@ Automates portfolio restructuring in one step. Given a `--target` list:
 
 Use `--dry-run` to preview without placing orders. Built 2026-06-04 to reduce manual workflow.
 
-## Current focused universe (as of 2026-06-29)
+## Current focused universe (as of 2026-07-01)
 
-Active portfolio: **BTI, CCL, CSCO, F, FCEL, SPCX, UMAC**. `MAX_OPEN_POSITIONS=8` — 7/8.
+Active portfolio: **CCL, CSCO, F, FCEL, GOOG, SPCX**. `MAX_OPEN_POSITIONS=8` — 6/8. Market closed Fri Jul 4.
 
 | Symbol | Entry | Notes |
 |---|---|---|
-| BTI | $59.82 | British American Tobacco. Dividend momentum. 17 shares. Stop $61.47 (trail-ratcheted, OCO), target $65.52. +4.5R intraday — risk-free hold. UBS buyback started 2026-06-30. |
-| CCL | $28.60 | Carnival Corp. EMA pullback. 25 shares. Stop $26.63, target $32.53. New engine entry 2026-06-30. |
-| CSCO | $117.88 | Cisco. Trend momentum. 8 shares. Stop $111.70, target $129.84. Re-entry 2026-06-29 after hours (GTC filled at open 2026-06-30). |
-| F | $14.37 | Ford. EMA pullback. 54 shares. Stop $13.34 (HELD), target $16.07. −1.4%, watch stop. |
-| FCEL | $29.60 | FuelCell Energy. ORB entry 2026-06-29. 11 shares. Stop $25.35, target $37.91 (bracket). +24% as of 2026-06-30 open. |
+| CCL | $28.60 | Carnival Corp. EMA pullback. 25 shares. Stop $26.63, target $32.53. Engine entry 2026-06-30. |
+| CSCO | $117.88 | Cisco. Trend momentum. 8 shares. Stop $111.70, target $129.84. Re-entry 2026-06-29 (GTC filled 2026-06-30 open). |
+| F | $14.37 | Ford. EMA pullback. 54 shares. Stop $13.34 (HELD), target $16.07. −$44 unrealized, approaching stop. |
+| FCEL | $29.60 | FuelCell Energy. ORB entry 2026-06-30 (re-entry). 11 shares. Stop $25.35, target $37.91 (bracket). +$44 (+1.5R). Jun 30 EOD close failed — bracket holds the shares, position protected. |
+| GOOG | $359.33 | Google. Trend momentum re-entry 2026-07-01 (prior entry stopped Jun 22 at −1R). 3 shares. Stop ~$341.60, target ~$391.49 (bracket). CLEAN verdict Jul 1. Engine ran late (Drive bridge delay) — executed manually 10:31 AM. |
 | SPCX | $163.62 | SpaceX. Long-term personal hold. 6 shares. Stop $155.44 (OCO GTC). Trail.py ratchets at 1R. No fixed target. IPO 2026-06-12. |
-| UMAC | $21.22 | Unusual Machines. ORB entry 2026-06-30. 49 shares. Stop $20.21, target $23.24. +6.6% as of 10 AM ET. |
 
-Recently closed: OUST EOD close 2026-06-29 at $54.10 (9 shares, entry $48.86, +$47, ~+1.0R; ORB hard close 3:55 PM). NOK stopped out 2026-06-29 at $12.25 (35 shares, entry $13.65, ~−$49, ~−1.0R). FCEL overnight OCO target hit 2026-06-29 at $29.43 (15 shares, entry $22.47, +$105, +1.0R; held overnight on 380 MW data center catalyst). CSCO stopped out 2026-06-26 at $114.18 (7 shares, entry $120.36, −$43.25, ~−0.97R). SDOT intraday ORB target hit 2026-06-26 at $16.11 (25 shares, entry $12.24, +$96.69). WAVE stopped out 2026-06-25 at $9.70 (ORB intraday; 333 shares filled due to duplicate engine instances — lockfile + bracket order fix applied same day). OUST stopped out 2026-06-25 at $41.20 (29 shares, ORB intraday, −$58, ~−1.0R). RKLB stopped out 2026-06-24 at $91.56 (3 shares, entry $109.24, −$53.03, ~−1.09R; gapped through stop on broad market selloff). INTC stopped out 2026-06-23 at $131.63 (3 shares, entry $120.70, +$32.79, ~+0.72R). SPCX stopped out 2026-06-22 at $161.61 (2 shares, entry $184.31, −$45.40, ~-1.0R; after-hours). GOOG stopped out 2026-06-22 at $350.59 (6 shares, ~-1.0R). SPCX stopped out 2026-06-16 at $196.30 (+$46.72, +1.02R). GRAB EOD close 2026-06-16 at $3.52 (-$13.15, -0.25R, ORB). F market sell 2026-06-16 at $14.62 (-$29.89, -0.67R). UBXG stopped out 2026-06-12 at $7.75 (+$36.92, ORB). SPCX target hit 2026-06-12 at $165.64 (+$98.98, ~1.87R). GOOG stopped out 2026-06-11 at $344.36 (~-1.0R). TGTX hit target +$88.76 (+1.52R) on 2026-06-04. KEEL stopped out -$52.36 (-1.00R) on 2026-06-04. LEGN manual close $0 on 2026-06-04. IREN stopped out 2026-06-04. LUNR stopped out 2026-06-04. VALE stopped out 2026-06-04 at $15.84.
+Recently closed: BTI OCO stop filled 2026-07-01 at $61.01 (gapped through $61.47 trail stop; entry $59.82, 17 shares, +$20.23 — profitable exit on job-cut/guidance CAUTION news). UMAC ORB 2026-07-01 +$61.48 (49 shares, scaled out half at $23.24, stopped remainder at $21.74). OUST EOD close 2026-06-29 at $54.10 (9 shares, entry $48.86, +$47, ~+1.0R; ORB hard close 3:55 PM). NOK stopped out 2026-06-29 at $12.25 (35 shares, entry $13.65, ~−$49, ~−1.0R). FCEL overnight OCO target hit 2026-06-29 at $29.43 (15 shares, entry $22.47, +$105, +1.0R; held overnight on 380 MW data center catalyst). CSCO stopped out 2026-06-26 at $114.18 (7 shares, entry $120.36, −$43.25, ~−0.97R). SDOT intraday ORB target hit 2026-06-26 at $16.11 (25 shares, entry $12.24, +$96.69). WAVE stopped out 2026-06-25 at $9.70 (ORB intraday; 333 shares filled due to duplicate engine instances — lockfile + bracket order fix applied same day). OUST stopped out 2026-06-25 at $41.20 (29 shares, ORB intraday, −$58, ~−1.0R). RKLB stopped out 2026-06-24 at $91.56 (3 shares, entry $109.24, −$53.03, ~−1.09R; gapped through stop on broad market selloff). INTC stopped out 2026-06-23 at $131.63 (3 shares, entry $120.70, +$32.79, ~+0.72R). SPCX stopped out 2026-06-22 at $161.61 (2 shares, entry $184.31, −$45.40, ~-1.0R; after-hours). GOOG stopped out 2026-06-22 at $350.59 (6 shares, ~-1.0R). SPCX stopped out 2026-06-16 at $196.30 (+$46.72, +1.02R). GRAB EOD close 2026-06-16 at $3.52 (-$13.15, -0.25R, ORB). F market sell 2026-06-16 at $14.62 (-$29.89, -0.67R). UBXG stopped out 2026-06-12 at $7.75 (+$36.92, ORB). SPCX target hit 2026-06-12 at $165.64 (+$98.98, ~1.87R). GOOG stopped out 2026-06-11 at $344.36 (~-1.0R). TGTX hit target +$88.76 (+1.52R) on 2026-06-04. KEEL stopped out -$52.36 (-1.00R) on 2026-06-04. LEGN manual close $0 on 2026-06-04. IREN stopped out 2026-06-04. LUNR stopped out 2026-06-04. VALE stopped out 2026-06-04 at $15.84.
+
+## Verdicts pipeline known issue (Drive bridge bug, 2026-07-01)
+
+The CCR morning routine creates a **new** `morning_verdicts_ccr.json` file in Drive each day using `mcp__claude_ai_Google_Drive__create_file`. The local `fetch_verdicts.py` cron (8:50 AM) uses a service account that can only see the original Jun 25 file (directly shared with it) — new files created by the user's personal account are invisible to the service account even with `parentId` + `allDrives` Drive API flags.
+
+**Workaround when verdicts are stale at engine time:** Open a Claude Code session, use the Drive MCP tool to read the newest `morning_verdicts_ccr.json` (user's personal Google account can see it), write its content to `morning_verdicts.json`, push to git, then run `python -m microbot.engine` manually.
+
+**Permanent fix options:**
+1. Have the CCR routine also write verdicts to the Google Sheet "Verdicts" tab (key: `date` / `verdicts_json` rows) — the service account has Sheets write access, and `fetch_verdicts.py`'s Sheet fallback already reads this format.
+2. Have the CCR routine update the existing shared file by ID (`1cTQgePuc7MM9A7ai3i5DBw4xKWES2cdC`) instead of creating a new one — requires a Drive API PATCH/update call, not currently available via MCP tools.
 
 ## Environment variables (.env)
 
