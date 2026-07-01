@@ -314,6 +314,17 @@ The CCR morning routine creates a **new** `morning_verdicts_ccr.json` file in Dr
 1. Have the CCR routine also write verdicts to the Google Sheet "Verdicts" tab (key: `date` / `verdicts_json` rows) — the service account has Sheets write access, and `fetch_verdicts.py`'s Sheet fallback already reads this format.
 2. Have the CCR routine update the existing shared file by ID (`1cTQgePuc7MM9A7ai3i5DBw4xKWES2cdC`) instead of creating a new one — requires a Drive API PATCH/update call, not currently available via MCP tools.
 
+## Git commit convention
+
+Every commit Claude makes in this repo must carry both trailers:
+
+```
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Co-Authored-By: Pedro Torres <pete.torres.375@gmail.com>
+```
+
+(Model name in the first line should match whichever Claude model is actually authoring, e.g. `Claude Opus 4.8` — keep the second line as-is.) Permanent as of 2026-07-01 — applies from here on, no need to ask each time.
+
 ## Environment variables (.env)
 
 ```
