@@ -42,7 +42,7 @@ INTRADAY_UNIVERSE = [
 MIN_GAP_PCT = 0.05
 MIN_REL_VOL = 2.0
 MIN_PRICE = 5.0
-MAX_FLOAT_M = 20  # million shares — low-float focus (Ross Cameron style)
+MAX_FLOAT_M = 20  # million shares — low-float focus
 CANDIDATES_FILE = "intraday_candidates.json"
 
 
