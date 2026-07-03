@@ -5,6 +5,11 @@ Exports closed trades from microbot's journal (microbot.db) to a CSV file
 that matches the trade_analyzer's expected format:
   date, time, symbol, setup, direction, entry, exit, shares
 
+Rows with pnl = 0 are excluded — these are no-fill orders and manual closes
+where the real exit price wasn't captured (entry price was reused as a
+placeholder), not real breakeven trades. microbot's own analyzer.py applies
+the same filter, so both tools agree on trade count and win rate.
+
 Run from the microbot directory:
     python export_to_analyzer.py
     python export_to_analyzer.py --out ~/projects/trade_analyzer/trades.csv
@@ -26,7 +31,7 @@ def export(db_path: Path, out_path: Path):
 
     con = sqlite3.connect(db_path)
     con.row_factory = sqlite3.Row
-    rows = con.execute("SELECT * FROM trades ORDER BY ts").fetchall()
+    rows = con.execute("SELECT * FROM trades WHERE pnl != 0 ORDER BY ts").fetchall()
     con.close()
 
     if not rows:
