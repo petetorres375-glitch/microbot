@@ -58,8 +58,8 @@ The bot's job is to:
 | Pre-Market Diagnostics | `trig_01RGqaa5TuyTVHn2ThGDmxSg` | Weekdays 7:30 AM ET | Full system check: credentials, Alpaca, open position stop audit, DB, git, core imports. GO/NO-GO verdict with ~2 hours to fix before trading starts |
 | Morning signal analysis | `trig_019TFaNMJyiH1atY2kykNHGD` | Weekdays 8:30 AM ET | Web-searches news on universe, delivers CLEAN/CAUTION/AVOID verdicts, writes `morning_verdicts_ccr.json` to Google Drive folder (GitHub push blocked by CCR proxy) |
 | Intraday pre-market scanner | `trig_01TX4CDGSGMLscLLgtkgeKAr` | Weekdays 9:15 AM ET | Runs gap scanner, web-searches news on candidates, prints CLEAN/MIXED/AVOID DAY briefing |
-| Daily research scan | `trig_019qsZJECstukLDhqDFXcv6R` | Weekdays 9:35 AM ET | Runs `run_research.py`, pushes ranked candidates + live signals to Google Sheets |
-| Weekly optimizer | `trig_01PYxALzYVnZuA88Kpror5Qo` | Mondays 9:00 AM ET | Walk-forward grid search, pushes `optimizer_proposals.json` to repo if improvements found |
+| Daily research scan | `trig_019qsZJECstukLDhqDFXcv6R` | Weekdays 9:35 AM ET | Runs `run_research.py`, pushes ranked candidates + live signals to Google Sheets. **Non-functional from CCR (confirmed 2026-07-06)** — see networking limitations below |
+| Weekly optimizer | `trig_01PYxALzYVnZuA88Kpror5Qo` | Mondays 9:00 AM ET | Walk-forward grid search, pushes `optimizer_proposals.json` to repo if improvements found. **Non-functional from CCR (confirmed 2026-07-06)** — see networking limitations below |
 
 View routine results at: https://claude.ai/code/routines
 
@@ -123,6 +123,11 @@ Focus on: morning verdicts freshness, core module imports, and git repo access �
 - The swing engine CCR routine (`trig_01S594UwnSLYX9HNtNZmeXgG`) is **disabled** — execution runs via local cron instead
 - The intraday scanner CCR routine no longer runs diagnostics — it goes straight to the gap scan and web search briefing
 - The morning analysis routine uses a GitHub PAT embedded in the push URL to authenticate `git push` (the CCR container has no stored credentials)
+
+**Confirmed 2026-07-06: the block covers market data too, not just trading.** Both the Daily research scan and Weekly optimizer CCR routines fail outright — `data.alpaca.markets` returns 403 from the egress proxy for every symbol's bar fetch (40/40 requests failed on the optimizer run). Only GitHub, Google APIs, and PyPI are reachable from CCR. Practical effect:
+- **Daily research scan**: can init the DB, run `reconcile` (no-op), and read that day's `morning_verdicts.json`, but cannot fetch bars, rank candidates, or refresh the Watchlist/LiveSignals Google Sheets tabs. Those only update from a local `run_research.py` run.
+- **Weekly optimizer**: produces zero proposals every run — `run_optimizer.py` needs bars for its walk-forward grid search and gets none. `optimizer_proposals.json` will never appear via this routine.
+- Both routines need to run **locally** (`python run_research.py` / `python run_optimizer.py`) to actually do their job. Neither is currently on the local crontab — add one if the Sheets dashboard or the self-improvement loop need to stay current without a manual run.
 
 ## Self-improvement loop (safe version)
 
