@@ -283,19 +283,24 @@ Use `--dry-run` to preview without placing orders. Built 2026-06-04 to reduce ma
 
 ## SPCX Long-Term Hold
 
-Personal long-term position, not a bot swing trade — the daily CCR verdicts and intraday moves don't apply to it. History: IPO 2026-06-12, several manual re-entries/stop-outs through June, last entry 2026-06-30 at $163.62 (6 shares, OCO stop $155.44). **Stop triggered 2026-07-01 at $155.44, filled at $157.62** (STOP orders convert to market on trigger — price had bounced by execution time) — actual −$36.01, ~−0.72R. Currently flat, no SPCX position held.
+Personal long-term position, not a bot swing trade — the daily CCR verdicts and intraday moves don't apply to it. History: IPO 2026-06-12, several manual re-entries/stop-outs through June, last entry 2026-06-30 at $163.62 (6 shares, OCO stop $155.44). Stop triggered 2026-07-01 at $155.44, filled at $157.62 (STOP orders convert to market on trigger — price had bounced by execution time) — actual −$36.01, ~−0.72R.
 
 Per user instruction (2026-07-01): watch for SPCX to reclaim the prior entry price and re-buy automatically rather than manually deciding. `watch_spcx.py` runs on the same cron cadence as `trail.py` (9:36 AM, hourly 10:30–3:30, 4:00 PM ET) and, once SPCX prints a verified real trade (size > 0, stamped today) at or above **$163.62**, buys back in — sized off `starting_equity` at 1% risk, 5% GTC stop below fill via OCO bracket, wide take-profit ceiling since `trail.py`'s 1R ratchet is the real exit. Skips if SPCX is already held, so repeated cron runs are idempotent. Log: `watch_spcx.log`.
 
-## Current focused universe (as of 2026-07-06)
+**Reclaim triggered 2026-07-06** — SPCX printed $165.14 (≥ $163.62), bought 6 shares, filled $164.88. The OCO stop/target submission crashed with `"oco orders must be exit orders"` — Alpaca's position bookkeeping hadn't caught up to the market fill yet, and the script had no retry, leaving the position briefly unprotected until caught manually (stop placed at $156.63, target $214.34). Fixed same day (commit `8ce4f12`): the script now waits for the position to actually appear before submitting the exit order, retries the OCO on `APIError`, and falls back to a plain stop (no take-profit leg) rather than crashing bare if OCO keeps failing.
 
-Active portfolio: **CCL, CSCO, GOOG**. `MAX_OPEN_POSITIONS=8` — 3/8. Market closed Fri Jul 4 (holiday observed since Jul 4 fell on Sat); no cron activity over the weekend.
+## Current focused universe (as of 2026-07-06 ~9:46 AM ET)
+
+Active portfolio: **CCL, CSCO, GOOG** (swing) + **PENG, SOXL** (ORB intraday, opened today) + **SPCX** (personal long-term re-entry, opened today). `MAX_OPEN_POSITIONS=8` — 3/8 on the swing side. Market closed Fri Jul 4 (holiday observed since Jul 4 fell on Sat); no cron activity over the weekend.
 
 | Symbol | Entry | Notes |
 |---|---|---|
-| CCL | $28.60 | Carnival Corp. EMA pullback. 25 shares. Stop $26.63 (live, HELD), target $32.53. Engine entry 2026-06-30. Currently $27.77, −$20.75 (−2.90%). |
-| CSCO | $117.75 | Cisco. Trend momentum. 8 shares. Stop $111.70 (live, HELD), target $129.84. Re-entry 2026-06-29 (GTC filled 2026-06-30 open). Currently $112.40, −$43.84 (−4.65%). Verdict Jul 6: CAUTION (valuation/margin/insider-selling concerns) — doesn't force a close, just blocks the engine from adding to it. |
-| GOOG | $358.23 | Google. Trend momentum re-entry 2026-07-01 (prior entry stopped Jun 22 at −1R). 3 shares. Stop $341.60 (live, HELD), target $391.49 (bracket). Currently $356.86, −$7.41 (−0.69%). Verdict Jul 6: CLEAN. |
+| CCL | $28.60 | Carnival Corp. EMA pullback. 25 shares. Stop $26.63 (live, HELD), target $32.53. Engine entry 2026-06-30. Currently $27.82, −$19.63 (−2.74%). |
+| CSCO | $117.88 | Cisco. Trend momentum. 8 shares. Stop $111.70 (live, HELD), target $129.84. Re-entry 2026-06-29 (GTC filled 2026-06-30 open). Currently $114.00, −$31.04 (−3.29%). Verdict Jul 6: CAUTION (valuation/margin/insider-selling concerns) — doesn't force a close, just blocks the engine from adding to it. |
+| GOOG | $359.33 | Google. Trend momentum re-entry 2026-07-01 (prior entry stopped Jun 22 at −1R). 3 shares. Stop $341.60 (live, HELD), target $391.49 (bracket). Currently $356.83, −$7.50 (−0.70%). Verdict Jul 6: CLEAN. |
+| PENG | $66.19 | ORB intraday, opened today from the 9:34 AM gap scan. 17 shares. Currently $66.84, +$11.07 (+0.98%). |
+| SOXL | $200.16 | ORB intraday, opened today from the 9:34 AM gap scan. 7 shares. Currently $204.49, +$30.33 (+2.17%). |
+| SPCX | $164.88 | Personal long-term reclaim re-entry — see "SPCX Long-Term Hold" below. 6 shares. Stop $156.63, target $214.34 (OCO, manually placed after the script's own OCO submission crashed). Currently $165.88, +$6.02 (+0.61%). |
 
 Total unrealized P/L across open positions (as of 2026-07-06 ~9:25 AM ET, premarket): −$72.00.
 
