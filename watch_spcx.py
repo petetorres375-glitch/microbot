@@ -35,8 +35,12 @@ load_dotenv()
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockLatestTradeRequest
 from alpaca.trading.client import TradingClient
-from alpaca.trading.requests import MarketOrderRequest, LimitOrderRequest, TakeProfitRequest, StopLossRequest
+from alpaca.trading.requests import (
+    MarketOrderRequest, LimitOrderRequest, StopOrderRequest,
+    TakeProfitRequest, StopLossRequest,
+)
 from alpaca.trading.enums import OrderSide, TimeInForce, OrderClass
+from alpaca.common.exceptions import APIError
 
 from microbot import journal
 from microbot.config import settings
@@ -137,17 +141,53 @@ def main():
             fill = price
             print(f"  Fill not confirmed — using poll price ${fill:.2f}")
 
+        # Alpaca's position bookkeeping can lag a market fill by a few
+        # seconds; submitting the exit OCO too early raises "oco orders
+        # must be exit orders". Wait for the position to actually appear
+        # before placing it.
+        for _ in range(10):
+            if any(p.symbol == SYMBOL for p in trading.get_all_positions()):
+                break
+            time.sleep(2)
+        else:
+            print(f"  WARNING: {SYMBOL} position never appeared after fill — "
+                  f"skipping OCO, check Alpaca manually.")
+            return
+
         stop = round(fill * (1 - STOP_PCT / 100), 2)
-        oco = trading.submit_order(LimitOrderRequest(
-            symbol=SYMBOL,
-            qty=qty,
-            side=OrderSide.SELL,
-            time_in_force=TimeInForce.GTC,
-            order_class=OrderClass.OCO,
-            take_profit=TakeProfitRequest(limit_price=round(fill * 1.30, 2)),
-            stop_loss=StopLossRequest(stop_price=stop),
-        ))
-        print(f"  OCO stop placed at ${stop:.2f}: {oco.id}")
+        target = round(fill * 1.30, 2)
+        oco = None
+        for attempt in range(3):
+            try:
+                oco = trading.submit_order(LimitOrderRequest(
+                    symbol=SYMBOL,
+                    qty=qty,
+                    side=OrderSide.SELL,
+                    time_in_force=TimeInForce.GTC,
+                    order_class=OrderClass.OCO,
+                    take_profit=TakeProfitRequest(limit_price=target),
+                    stop_loss=StopLossRequest(stop_price=stop),
+                ))
+                break
+            except APIError as e:
+                print(f"  OCO attempt {attempt + 1} failed: {e}")
+                time.sleep(3)
+
+        if oco is not None:
+            print(f"  OCO stop placed at ${stop:.2f}: {oco.id}")
+        else:
+            # Position is filled and otherwise unprotected — a plain stop
+            # (no take-profit leg) is strictly better than nothing.
+            print("  OCO failed after retries — falling back to a plain stop order.")
+            fallback = trading.submit_order(StopOrderRequest(
+                symbol=SYMBOL,
+                qty=qty,
+                side=OrderSide.SELL,
+                time_in_force=TimeInForce.GTC,
+                stop_price=stop,
+            ))
+            print(f"  Fallback stop placed at ${stop:.2f}: {fallback.id} "
+                  f"(no take-profit leg — check Alpaca manually)")
 
         journal.log_manual_order(
             alpaca_id=str(buy.id),
