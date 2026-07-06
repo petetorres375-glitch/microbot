@@ -79,7 +79,11 @@ SHELL=/bin/bash
 36 9 * * 1-5 cd /home/lenovo-home/microbot && source .venv/bin/activate && python watch_spcx.py >> /home/lenovo-home/microbot/watch_spcx.log 2>&1
 30 10-15 * * 1-5 cd /home/lenovo-home/microbot && source .venv/bin/activate && python watch_spcx.py >> /home/lenovo-home/microbot/watch_spcx.log 2>&1
 0 16 * * 1-5 cd /home/lenovo-home/microbot && source .venv/bin/activate && python watch_spcx.py >> /home/lenovo-home/microbot/watch_spcx.log 2>&1
+41 9 * * 1-5 cd /home/lenovo-home/microbot && git pull --quiet && source .venv/bin/activate && python run_research.py >> /home/lenovo-home/microbot/research.log 2>&1
+0 6 * * 1 cd /home/lenovo-home/microbot && git pull --quiet && source .venv/bin/activate && python run_optimizer.py >> /home/lenovo-home/microbot/optimizer.log 2>&1
 ```
+
+`run_research.py` (added 2026-07-06) and `run_optimizer.py` (added 2026-07-06) run locally because their CCR routine equivalents are non-functional — `data.alpaca.markets` is blocked from the CCR sandbox, so neither can fetch bars there (see "CCR networking limitations" below). `run_research.py` runs weekdays at 9:41 AM ET (after the 9:34/9:35/9:36 engine/intraday/trail crons, to avoid API contention) and pushes the ranked Watchlist/LiveSignals/Positions/DailyTrades tabs to Google Sheets directly — no git push needed. `run_optimizer.py` runs Mondays at 6:00 AM ET, before market-hours crons start, and only writes `optimizer_proposals.json` locally; nothing auto-imports it — still run `python import_proposals.py && python -m microbot.approvals --params` manually per the self-improvement loop workflow below.
 
 **Important:** `SHELL=/bin/bash` is required — cron defaults to `/bin/sh` (dash on Ubuntu) which does not support `source`. Without it, both jobs silently fail at the activate step and never run.
 
