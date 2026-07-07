@@ -155,7 +155,7 @@ The weekly remote optimizer does walk-forward grid search and proposes better st
 - **Positions** — current open positions pulled live from Alpaca: symbol, shares, entry, current price, P&L $, P&L %, stop, target, and a **Health** column. Health shows the R-multiple (`(current - entry) / (entry - stop)`) with labels: `+1.2R STRONG` / `+0.3R Winning` / `Breakeven` / `-0.2R At Risk`. Stop/target only populate during market hours when bracket legs are active. After hours, Health falls back to `Winning (no stop)` / `At Risk (no stop)` so the label is never mistaken for a real R-multiple grade. Future improvement: read stop/target from the journal DB instead of live orders for true 24/7 R-multiple.
 - **DailyTrades** — today's human-approved trades (status=`submitted` in the journal): symbol, strategy, qty, entry, stop, target, dollar risk, and time approved. Resets each day. Added 2026-06-03 (commit 8e97e54).
 
-`run_research.py` sleeps 20 seconds after writing Watchlist/LiveSignals before pushing Positions and DailyTrades, to avoid hitting the Google Sheets 60-writes/minute quota.
+`run_research.py` sleeps 30 seconds after writing Watchlist/LiveSignals before pushing Positions and DailyTrades, to avoid hitting the Google Sheets 60-writes/minute quota. **Fixed 2026-07-07 (commit a11812b):** the fixed pause wasn't always enough — Watchlist/LiveSignals alone can consume most of the quota, causing Positions/DailyTrades to silently skip on a 429. `push_positions()`/`push_daily_trades()` in `tracker_gsheets.py` now retry each Sheets write once (with a 20s wait) on a 429 before giving up.
 
 The daily scan routine refreshes the sheet automatically at 9:35 AM ET every trading day.
 
