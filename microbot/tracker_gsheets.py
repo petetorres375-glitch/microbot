@@ -16,9 +16,22 @@ it no-ops with a printed warning instead of crashing the bot.
 """
 from __future__ import annotations
 
+import time
 from typing import Dict, List
 
 from .config import settings
+
+
+def _retry_on_quota(fn, *, retries=1, wait=20):
+    """Run fn(); on a Sheets 429 write-quota error, wait and retry before giving up."""
+    for attempt in range(retries + 1):
+        try:
+            return fn()
+        except Exception as e:
+            if "429" in str(e) and attempt < retries:
+                time.sleep(wait)
+                continue
+            raise
 
 
 def _spy_benchmark(lookback_days: int = 1100) -> str:
@@ -461,7 +474,7 @@ def push_positions() -> bool:
 
         sh = _client().open_by_key(settings.gsheet_id)
         pos_headers = ["Symbol", "Shares", "Entry", "Current", "P&L $", "P&L %", "Stop", "Target", "Health"]
-        ws = _ensure_ws(sh, "Positions", pos_headers)
+        ws = _retry_on_quota(lambda: _ensure_ws(sh, "Positions", pos_headers))
 
         rows = []
         for p in sorted(positions, key=lambda x: x.symbol):
@@ -501,8 +514,8 @@ def push_positions() -> bool:
             ])
 
         if rows:
-            ws.update(values=rows, range_name="A3")
-        _format_positions(ws, len(rows))
+            _retry_on_quota(lambda: ws.update(values=rows, range_name="A3"))
+        _retry_on_quota(lambda: _format_positions(ws, len(rows)))
         print(f"  (gsheets) pushed {len(rows)} positions.")
         return True
     except Exception as e:
@@ -527,7 +540,7 @@ def push_daily_trades() -> bool:
 
         sh = _client().open_by_key(settings.gsheet_id)
         headers = ["Symbol", "Strategy", "Qty", "Entry", "Stop", "Target", "$ Risk", "Time"]
-        ws = _ensure_ws(sh, "DailyTrades", headers)
+        ws = _retry_on_quota(lambda: _ensure_ws(sh, "DailyTrades", headers))
 
         rows = []
         for a in sorted(todays, key=lambda x: x.get("decided_ts") or ""):
@@ -550,8 +563,8 @@ def push_daily_trades() -> bool:
             ])
 
         if rows:
-            ws.update(values=rows, range_name="A3")
-        _format_daily_trades(ws, len(rows))
+            _retry_on_quota(lambda: ws.update(values=rows, range_name="A3"))
+        _retry_on_quota(lambda: _format_daily_trades(ws, len(rows)))
         print(f"  (gsheets) pushed {len(rows)} daily trades.")
         return True
     except Exception as e:

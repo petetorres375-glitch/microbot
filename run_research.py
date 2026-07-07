@@ -7,7 +7,7 @@ from microbot.tracker_gsheets import push_positions, push_daily_trades, _spy_ben
 
 run_once(research_only=True, push_sheets=True)
 print(f"\n--- Benchmark --- {_spy_benchmark()}")
-time.sleep(20)  # avoid Sheets write-quota 429 after Watchlist/LiveSignals writes
+time.sleep(30)  # avoid Sheets write-quota 429 after Watchlist/LiveSignals writes; push_positions/push_daily_trades also retry once on 429
 push_positions()
 push_daily_trades()
 
