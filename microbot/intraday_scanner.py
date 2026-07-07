@@ -42,7 +42,6 @@ INTRADAY_UNIVERSE = [
 MIN_GAP_PCT = 0.05
 MIN_REL_VOL = 2.0
 MIN_PRICE = 5.0
-MAX_FLOAT_M = 20  # million shares — low-float focus
 CANDIDATES_FILE = "intraday_candidates.json"
 
 
@@ -217,13 +216,19 @@ def main():
                    help="Minimum relative volume (default: 2.0)")
     p.add_argument("--min-price", type=float, default=MIN_PRICE,
                    help="Minimum price filter (default: 5.0)")
-    p.add_argument("--max-float", type=float, default=MAX_FLOAT_M,
-                   help="Maximum float in millions (default: 20M). Use 0 to disable.")
+    p.add_argument("--max-float", type=float, default=None,
+                   help="Maximum float in millions (default: settings.max_float_m). Use 0 to disable.")
     args = p.parse_args()
 
+    if args.max_float is None:
+        max_float_m = None  # scan() falls back to settings.max_float_m
+    elif args.max_float <= 0:
+        max_float_m = float("inf")
+    else:
+        max_float_m = args.max_float
+
     candidates = scan(top=args.top, min_gap=args.min_gap, min_relvol=args.min_relvol,
-                      min_price=args.min_price,
-                      max_float_m=args.max_float if args.max_float > 0 else float("inf"))
+                      min_price=args.min_price, max_float_m=max_float_m)
 
     if not candidates:
         print("No qualifying candidates today.")
