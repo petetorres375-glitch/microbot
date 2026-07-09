@@ -307,6 +307,8 @@ Per user instruction (2026-07-01): watch for SPCX to reclaim the prior entry pri
 
 **Stopped out again same day, 2026-07-06** — the manually-placed $156.63 stop filled at 1:48 PM ET, 6 shares @ $156.67 avg, ~−$49.27 (~−1.0R). Not held as of end of day; `watch_spcx.py` cron resumes watching for a fresh $163.62 reclaim on the next run.
 
+**Reclaim confirmation added 2026-07-09 (commit `f4171d0`):** the $163.62 trigger whipsawed twice on 2026-07-06 (both reclaims above reversed within hours for a quick stop-out loss), showing the level acts as resistance rather than a clean breakout. `watch_spcx.py` now persists a first-seen-at-or-above-trigger timestamp (`spcx_watch_state.json`, gitignored) across cron runs and only buys once price has held at/above $163.62 for `CONFIRM_MINUTES` (30) of real wall-clock time; any dip back below the trigger resets the clock. Given the hourly cron cadence, this means a reclaim must survive at least one more scheduled check before triggering a buy. Trigger price itself (`$163.62`) is unchanged — this only adds a holding-period gate before acting on it.
+
 ## Current focused universe (as of 2026-07-09 ~9:45 AM ET, market open)
 
 Active portfolio: **ET, EPD, GOOG, SOFI** (swing) **+ PENG** (ORB-origin, adopted into the swing journal — see below). `MAX_OPEN_POSITIONS=8` — 5/8.
