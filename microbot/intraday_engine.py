@@ -251,25 +251,33 @@ class IntradayEngine:
 
     # ---- order helpers ----
 
-    def _cancel_stop(self, s: ORBState):
+    def _cancel_stop(self, s: ORBState) -> bool:
+        """Cancel the current stop order. Returns True only once Alpaca
+        confirms the shares are no longer held (canceled/filled/expired/
+        rejected). On timeout, leaves s.stop_order_id untouched — the
+        position stays protected and fill-monitored, and the next poll
+        retries the same cancel instead of silently losing track of it."""
         if not s.stop_order_id:
-            return
+            return True
         order_id = s.stop_order_id
-        s.stop_order_id = ""   # clear before cancel so fill-detection ignores it
         try:
             self.trading.cancel_order_by_id(order_id)
         except Exception:
             pass
         # Shares stay held until the cancel is processed — a replacement stop
-        # submitted too early is rejected, leaving the position unprotected.
+        # or a sell against those shares submitted too early is rejected.
         for _ in range(10):
             try:
                 status = str(self.trading.get_order_by_id(order_id).status).lower()
             except Exception:
-                return
+                s.stop_order_id = ""
+                return True
             if any(t in status for t in ("canceled", "filled", "expired", "rejected")):
-                return
+                s.stop_order_id = ""
+                return True
             time.sleep(1)
+        print(f"  cancel stop timed out for order {order_id} — leaving stop in place, will retry")
+        return False
 
     def _submit_stop(self, sym: str, qty: int, stop_price: float,
                      attempts: int = 3) -> str:
@@ -380,7 +388,9 @@ class IntradayEngine:
                 self._close_position(sym, price, "target")
                 return
             if half >= 1:
-                self._cancel_stop(s)
+                if not self._cancel_stop(s):
+                    print(f"  scale-out deferred {sym}: stop still held, retrying next poll")
+                    return
                 try:
                     self.trading.submit_order(MarketOrderRequest(
                         symbol=sym, qty=half,
@@ -422,7 +432,9 @@ class IntradayEngine:
             if gain > 0:
                 trail = s.entry_price + 0.25 * gain
                 if trail > s.stop_price + 0.05:
-                    self._cancel_stop(s)
+                    if not self._cancel_stop(s):
+                        print(f"  trail deferred {sym}: stop still held, retrying next poll")
+                        return
                     s.stop_order_id = self._submit_stop(
                         sym, s.qty_remaining, trail
                     )
@@ -473,7 +485,9 @@ class IntradayEngine:
 
     def _close_position(self, sym: str, price: float, reason: str) -> bool:
         s = self.states[sym]
-        self._cancel_stop(s)
+        if not self._cancel_stop(s):
+            print(f"  close deferred {sym}: stop still held")
+            return False
         if s.qty_remaining >= 1:
             try:
                 self.trading.submit_order(MarketOrderRequest(
@@ -491,9 +505,15 @@ class IntradayEngine:
     def _eod_close_all(self, prices: Dict[str, float]):
         print("3:55 PM — closing all intraday positions")
         for sym, s in self.states.items():
-            if s.in_trade and not s.closed:
-                if not self._close_position(sym, prices.get(sym, s.entry_price), "eod_close"):
-                    print(f"  EMERGENCY: {sym} could not be closed — check Alpaca manually")
+            if not (s.in_trade and not s.closed):
+                continue
+            for attempt in range(5):
+                if self._close_position(sym, prices.get(sym, s.entry_price), "eod_close"):
+                    break
+                print(f"  retrying close {sym} ({attempt + 1}/5)...")
+                time.sleep(3)
+            else:
+                print(f"  EMERGENCY: {sym} could not be closed — check Alpaca manually")
 
     # ---- main loop ----
 
