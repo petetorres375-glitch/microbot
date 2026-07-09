@@ -23,11 +23,22 @@ engine run, sized off the $100K paper acct.equity instead of starting_equity):
 Sizing/exit mirror enter_spcx_jun30.py: size from settings.starting_equity
 (not the $100K paper default), 5% GTC stop below fill via OCO bracket, wide
 take-profit ceiling since trail.py is the real exit (ratchets once up >= 1R).
+
+**Reclaim confirmation (added 2026-07-09):** the trigger reclaimed twice on
+2026-07-06 and whipsawed back down within hours both times for a quick
+stop-out loss each time — a single verified print at/above $163.62 isn't
+enough to tell a real reclaim from a wick through resistance. A first-seen
+timestamp is now persisted across cron runs (STATE_FILE); the buy only
+fires once the price has stayed at or above the trigger for CONFIRM_MINUTES
+of real wall-clock time, and any dip back below the trigger resets the
+clock. Since this runs hourly during market hours, that's effectively "hold
+the reclaim through at least one more scheduled check" before buying.
 """
+import json
 import os
 import sys
 import time
-from datetime import date
+from datetime import date, datetime, timezone
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -45,10 +56,32 @@ from alpaca.common.exceptions import APIError
 from microbot import journal
 from microbot.config import settings
 
-SYMBOL       = "SPCX"
-TRIGGER      = 163.62  # prior entry / stop-out price — reclaim confirms recovery
-STOP_PCT     = 5.0     # % below fill
-LOCK_FILE    = "spcx_watch.lock"
+SYMBOL           = "SPCX"
+TRIGGER          = 163.62  # prior entry / stop-out price — reclaim confirms recovery
+STOP_PCT         = 5.0     # % below fill
+LOCK_FILE        = "spcx_watch.lock"
+STATE_FILE       = "spcx_watch_state.json"
+CONFIRM_MINUTES  = 30      # reclaim must hold this long before buying
+
+
+def _load_first_seen() -> datetime | None:
+    try:
+        with open(STATE_FILE) as f:
+            ts = json.load(f).get("first_seen_at_or_above_trigger")
+        return datetime.fromisoformat(ts) if ts else None
+    except (FileNotFoundError, ValueError, json.JSONDecodeError):
+        return None
+
+
+def _save_first_seen(ts: datetime | None):
+    if ts is None:
+        try:
+            os.remove(STATE_FILE)
+        except OSError:
+            pass
+        return
+    with open(STATE_FILE, "w") as f:
+        json.dump({"first_seen_at_or_above_trigger": ts.isoformat()}, f)
 
 
 def _acquire_lock() -> bool:
@@ -109,10 +142,30 @@ def main():
             return
 
         if price < TRIGGER:
-            print(f"watch_spcx: {SYMBOL} ${price:.2f} < trigger ${TRIGGER:.2f} — waiting.")
+            if _load_first_seen() is not None:
+                print(f"watch_spcx: {SYMBOL} ${price:.2f} < trigger ${TRIGGER:.2f} — "
+                      f"reclaim lost, resetting confirmation clock.")
+                _save_first_seen(None)
+            else:
+                print(f"watch_spcx: {SYMBOL} ${price:.2f} < trigger ${TRIGGER:.2f} — waiting.")
             return
 
-        print(f"watch_spcx: {SYMBOL} ${price:.2f} >= trigger ${TRIGGER:.2f} — reclaim confirmed, buying.")
+        now = datetime.now(timezone.utc)
+        first_seen = _load_first_seen()
+        if first_seen is None:
+            _save_first_seen(now)
+            print(f"watch_spcx: {SYMBOL} ${price:.2f} >= trigger ${TRIGGER:.2f} — "
+                  f"reclaim seen, waiting {CONFIRM_MINUTES}min for confirmation before buying.")
+            return
+
+        held_minutes = (now - first_seen).total_seconds() / 60
+        if held_minutes < CONFIRM_MINUTES:
+            print(f"watch_spcx: {SYMBOL} ${price:.2f} >= trigger ${TRIGGER:.2f} — "
+                  f"held {held_minutes:.0f}/{CONFIRM_MINUTES}min, waiting for confirmation.")
+            return
+
+        print(f"watch_spcx: {SYMBOL} ${price:.2f} >= trigger ${TRIGGER:.2f} for "
+              f"{held_minutes:.0f}min — reclaim confirmed, buying.")
 
         equity      = settings.starting_equity
         risk_budget = equity * 0.01
@@ -127,6 +180,7 @@ def main():
             side=OrderSide.BUY,
             time_in_force=TimeInForce.DAY,
         ))
+        _save_first_seen(None)  # confirmation done its job — reset for next cycle
         print(f"  Buy order submitted: {buy.id}")
 
         fill = None
