@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import datetime
 import json
+import threading
 from datetime import date
 from typing import Dict, List, Optional
 from zoneinfo import ZoneInfo
@@ -76,13 +77,36 @@ def _batch_snapshots(symbols: List[str]) -> Dict:
     return result
 
 
-def _get_yf_data(symbol: str) -> dict:
+YF_TIMEOUT_SECS = 10.0
+
+
+def _get_yf_data(symbol: str, timeout: float = YF_TIMEOUT_SECS) -> dict:
     """Fetch pace-adjusted relative volume and float shares in one yfinance call.
 
     rel_volume: today's per-minute rate vs. historical average (consolidated).
     float_shares: public float from yf.info, falls back to shares outstanding.
     Returns None for float_shares when data is unavailable (don't filter those out).
+
+    yfinance calls have no reliable native timeout (Ticker.info/fast_info can hang
+    indefinitely on a stalled Yahoo response), so run the fetch on a daemon thread
+    and give up after `timeout` seconds — a stuck symbol never blocks the scan.
+    Uses a plain daemon Thread (not ThreadPoolExecutor): a pool's shutdown() joins
+    its worker threads on exit, which would re-block forever on a truly hung call.
+    A daemon thread is simply abandoned — no join, no blocking process exit.
     """
+    default = {"rel_volume": 0.0, "float_shares": None}
+    holder: dict = {}
+    t = threading.Thread(target=lambda: holder.update(data=_get_yf_data_impl(symbol)),
+                          daemon=True)
+    t.start()
+    t.join(timeout)
+    if t.is_alive():
+        print(f"  yfinance timeout ({timeout:.0f}s) on {symbol} — skipping")
+        return default
+    return holder.get("data", default)
+
+
+def _get_yf_data_impl(symbol: str) -> dict:
     result = {"rel_volume": 0.0, "float_shares": None}
     try:
         now_et = datetime.datetime.now(ZoneInfo("America/New_York"))
