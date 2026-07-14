@@ -309,14 +309,26 @@ Per user instruction (2026-07-01): watch for SPCX to reclaim the prior entry pri
 
 **Reclaim confirmation added 2026-07-09 (commit `f4171d0`):** the $163.62 trigger whipsawed twice on 2026-07-06 (both reclaims above reversed within hours for a quick stop-out loss), showing the level acts as resistance rather than a clean breakout. `watch_spcx.py` now persists a first-seen-at-or-above-trigger timestamp (`spcx_watch_state.json`, gitignored) across cron runs and only buys once price has held at/above $163.62 for `CONFIRM_MINUTES` (30) of real wall-clock time; any dip back below the trigger resets the clock. Given the hourly cron cadence, this means a reclaim must survive at least one more scheduled check before triggering a buy. Trigger price itself (`$163.62`) is unchanged — this only adds a holding-period gate before acting on it.
 
-## Current focused universe (as of 2026-07-14 ~8:45 AM ET, pre-market)
+## Current focused universe (as of 2026-07-14 ~10 AM ET, market open)
 
-Active portfolio: **EPD, ET** (swing only). `MAX_OPEN_POSITIONS=8` — 2/8, 1 slot freed up by SOFI's stop-out. Combined unrealized ~+$76.68.
+Active portfolio: **EPD, ET, HOOD, RLAY** (swing only). `MAX_OPEN_POSITIONS=8` — 4/8, 4 slots open.
 
 | Symbol | Entry | Notes |
 |---|---|---|
 | ET | $19.47 | Energy Transfer. Dividend momentum. 72 shares. Engine auto-entry 2026-07-06 (CLEAN verdict). Trail ratcheted stop $18.76→$19.83 (+1.1R) 2026-07-13. |
 | EPD | $37.75 | Enterprise Products Partners. Dividend momentum. 36 shares. Engine auto-entry 2026-07-08. |
+| HOOD | $109.52 | Robinhood. Trend momentum. 3 shares. Engine auto-entry 2026-07-14 (CLEAN verdict). |
+| RLAY | $18.86 | Relay Therapeutics. ema_pullback. 20 shares. Engine auto-entry 2026-07-14 — today's top-scoring signal (3.591), only fired because of the universe-sync fix below plus a same-morning manual CLEAN verdict addition. |
+
+**Universe/verdicts sync bug fixed 2026-07-14 (commit `b00b46a`):** the CCR morning verdicts routine reads `microbot/config.py`'s hardcoded `UNIVERSE` default (its Step 1), but `.env` is gitignored so the routine never saw the real 38-symbol trading universe — only a stale 23-symbol default (with RKLB/AMKR/LION still in it, 18 real symbols missing including RLAY, NOK, BB, HPE, MRVL, USAR, RDW, LUNR, RGTI, IONQ, QBTS, ALAB, QS, BBAI, WDFC, GLD, AEHR, PENG). Fixed by syncing the default to match `.env` exactly — no behavior change locally, but the CCR routine now analyzes the full universe going forward. Same day, manually verdict-checked and added `RLAY: CLEAN` to that morning's `morning_verdicts.json` (commit `0bd9f86`) with minutes to spare before the 9:35 AM cron — engine picked it up and auto-executed.
+
+**Known duplicate of the same bug pattern, not yet fixed:** the disabled "Intraday pre-market scanner" CCR routine (`trig_01TX4CDGSGMLscLLgtkgeKAr`) has its own hardcoded, separately-stale, truncated `UNIVERSE=` string baked into a literal `.env`-writing step in its prompt — and that same step also hardcodes the **raw Alpaca API key and secret in plaintext**. Routine is currently `enabled: false`. Needs a rewrite to read from the repo instead of embedding secrets, whenever it's revisited.
+
+**AMD/ALAB structurally unsizeable:** both routinely get CLEAN verdicts but their ATR stop distances need $70–84/share risk against a $50 budget (1% of $5,000 equity) — always skipped at the sizing gate regardless of verdict. Undecided whether to trim from `UNIVERSE` or accept as permanent noise.
+
+**NXTC ORB trade closed 2026-07-14** — merger-arb name (NextCure/Avere Therapeutics all-stock merger + $320M financing; real catalyst, not a data glitch — thin float 2.26M shares, huge $7.07–$12.23 intraday range). Entered 32 sh @ $9.65, stop $8.27; the violently whipsawing thin-float name gapped through the stop trigger on fill, closing @ $7.91 → **-$55.62 (-1.26R)**. Bracket order worked correctly (no stuck orders) — the overshoot past 1R is ordinary stop-to-market slippage on an extreme mover, same pattern as prior gap-through-stop incidents (SPCX, BTI).
+
+**Alpaca paper API reliably congests 9:30–9:50 AM ET** — verification queries hit `request timed out` (code 50410000) repeatedly during today's market open; not a code bug, just retry after the open settles.
 
 **SOFI stopped out 2026-07-13 at 4:02 PM ET** — exit $18.48 (the ratcheted trail stop, not the original $16.11 bracket stop), entry $17.49, 36 shares → **+$35.64 (+0.72R)**. Trail had ratcheted the stop $16.11→$18.48 earlier that day at +1.4R; price pulled back into the close and tagged the trailed level instead of giving back the full gain — confirms the trail ratchet converting a pullback into a locked-in win rather than a round-trip to breakeven/loss.
 
