@@ -32,9 +32,14 @@ def backtest_symbol(strategy: Strategy, symbol: str, df: pd.DataFrame,
     trades: List[Dict] = []
     i = strategy.min_bars()
     n = len(df)
+    # Precompute every indicator ONCE on the full history (see
+    # Strategy.precompute docstring) instead of recomputing on a truncated
+    # window at every single bar - this is what made research() take 10+
+    # minutes across the full universe.
+    cache = strategy.precompute(df)
     while i < n:
         window = df.iloc[: i + 1]
-        sig = strategy.evaluate(symbol, window)
+        sig = strategy.evaluate(symbol, window, cache=cache)
         if sig is None:
             i += 1
             continue

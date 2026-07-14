@@ -9,6 +9,8 @@ Learning note: indicators are just rolling math over price. Nothing magic.
 """
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 import pandas as pd
 
@@ -81,6 +83,54 @@ def weekly_ema_aligned(df: pd.DataFrame, period: int = 10) -> bool:
     above_ema = bool(weekly_close.iloc[-1] > w_ema.iloc[-1])
     ema_rising = bool(w_ema.iloc[-1] > w_ema.iloc[-2])
     return above_ema and ema_rising
+
+
+def weekly_ema_aligned_series(df: pd.DataFrame, period: int = 10) -> pd.Series:
+    """
+    Vectorized equivalent of calling weekly_ema_aligned(df.iloc[:i+1]) for
+    every row i - one resample + one ewm over the (short) completed-weekly
+    series instead of the O(bars) repeated resample of the naive per-bar call
+    (previously ~1.8s of a 6.7s single-symbol backtest, purely from calling
+    resample() once per day on a growing window).
+
+    Derivation: for a day i inside week k, the per-bar function's weekly_close
+    series is [completed weekly closes before week k] + [close_i] (the
+    in-progress week's close-so-far - there's no lookahead since a truncated
+    window can only contribute its own last row to the current bucket).
+    Because EMA_new = alpha*x + (1-alpha)*EMA_prev is a strict interpolation
+    between EMA_prev and x, both "x > EMA_new" (above_ema) and
+    "EMA_new > EMA_prev" (ema_rising) are algebraically equivalent to the same
+    single condition x > EMA_prev (dividing through by the shared (1-alpha)
+    factor). So the whole per-bar check collapses to: is today's close above
+    the EMA computed through the END of the last fully completed week.
+    """
+    if not isinstance(df.index, pd.DatetimeIndex):
+        return pd.Series(True, index=df.index)
+    try:
+        weekly_close = df["close"].resample("W-FRI").last().dropna()
+    except Exception:
+        return pd.Series(True, index=df.index)
+
+    w_ema = weekly_close.ewm(span=period, adjust=False).mean()
+    prev_ema = w_ema.shift(1)  # EMA through the end of the PRIOR completed week
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        week_period = df.index.to_period("W-FRI")
+        weekly_period_index = weekly_close.index.to_period("W-FRI")
+    prev_ema_lookup = pd.Series(prev_ema.values, index=weekly_period_index)
+
+    result = pd.Series(True, index=df.index)
+    close = df["close"]
+    for pos, p in enumerate(weekly_period_index):
+        mask = (week_period == p)
+        if not mask.any():
+            continue
+        if pos < period + 1:  # matches original "len(weekly_close) < period + 2" fallback
+            result[mask] = True
+        else:
+            result[mask] = (close[mask] > prev_ema_lookup.loc[p]).to_numpy()
+    return result
 
 
 def adx(df: pd.DataFrame, period: int = 14) -> pd.Series:

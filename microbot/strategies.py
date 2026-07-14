@@ -70,17 +70,37 @@ class Strategy:
         self.stop_mult = stop_mult
         self.weekly_filter = weekly_filter
 
-    def _weekly_aligned(self, df: pd.DataFrame) -> bool:
+    def _weekly_aligned(self, df: pd.DataFrame, cache: dict | None = None) -> bool:
         """True if the weekly trend is aligned (or weekly_filter is disabled)."""
         if not self.weekly_filter:
             return True
+        if cache and "weekly_aligned" in cache:
+            return bool(cache["weekly_aligned"].loc[df.index[-1]])
         return ind.weekly_ema_aligned(df)
 
-    def evaluate(self, symbol: str, df: pd.DataFrame) -> Optional[Signal]:
+    def evaluate(self, symbol: str, df: pd.DataFrame, cache: dict | None = None) -> Optional[Signal]:
         raise NotImplementedError
 
     def min_bars(self) -> int:
         return 60
+
+    def precompute(self, df: pd.DataFrame) -> dict:
+        """
+        Compute every indicator series ONCE on the full history, so backtest's
+        bar-by-bar walk-forward loop can look values up by date instead of
+        recomputing them from scratch on a truncated window at every bar
+        (previously O(n^2) — a single symbol/strategy pair over ~750 bars took
+        6.7s; with a ~45-symbol universe x 7 strategies that's the entire
+        10+ minute research delay). Every one of these is a rolling/EWM causal
+        computation, so a value at date d computed on the full df is identical
+        to one computed on any prefix window ending at or after d — no lookahead
+        is introduced. The one exception (weekly_ema_aligned's resample-based
+        current-week bucket) is deliberately NOT cached here and still
+        recomputes per-bar in `_weekly_aligned`, since vectorizing it safely
+        needs more care than a plain rolling/EWM series.
+        Returns {} by default (falls back to the always-correct recompute path).
+        """
+        return {}
 
 
 class TrendMomentum(Strategy):
@@ -93,26 +113,46 @@ class TrendMomentum(Strategy):
     def min_bars(self):
         return self.slow + self.atr_period + 5
 
-    def evaluate(self, symbol, df):
+    def precompute(self, df):
+        close = df["close"]
+        return {
+            "fast": ind.ema(close, self.fast),
+            "slow": ind.ema(close, self.slow),
+            "adx": ind.adx(df, 14),
+            "atr": ind.atr(df, self.atr_period),
+            "weekly_aligned": ind.weekly_ema_aligned_series(df),
+        }
+
+    def evaluate(self, symbol, df, cache=None):
         if len(df) < self.min_bars():
             return None
-        if not self._weekly_aligned(df):
+        if not self._weekly_aligned(df, cache):
             return None
         close = df["close"]
-        fast = ind.ema(close, self.fast)
-        slow = ind.ema(close, self.slow)
-        adx = ind.adx(df, 14)
-        a = ind.atr(df, self.atr_period).iloc[-1]
+        d, dp = df.index[-1], df.index[-2]
+        if cache:
+            fast_now, fast_prev = cache["fast"].loc[d], cache["fast"].loc[dp]
+            slow_now, slow_prev = cache["slow"].loc[d], cache["slow"].loc[dp]
+            adx_now = cache["adx"].loc[d]
+            a = cache["atr"].loc[d]
+        else:
+            fast = ind.ema(close, self.fast)
+            slow = ind.ema(close, self.slow)
+            adx = ind.adx(df, 14)
+            fast_now, fast_prev = fast.iloc[-1], fast.iloc[-2]
+            slow_now, slow_prev = slow.iloc[-1], slow.iloc[-2]
+            adx_now = adx.iloc[-1]
+            a = ind.atr(df, self.atr_period).iloc[-1]
 
-        crossed_up = fast.iloc[-2] <= slow.iloc[-2] and fast.iloc[-1] > slow.iloc[-1]
-        trending = adx.iloc[-1] >= self.adx_min
-        in_uptrend = fast.iloc[-1] > slow.iloc[-1] and close.iloc[-1] > slow.iloc[-1]
+        crossed_up = fast_prev <= slow_prev and fast_now > slow_now
+        trending = adx_now >= self.adx_min
+        in_uptrend = fast_now > slow_now and close.iloc[-1] > slow_now
 
         # Enter on a fresh cross, OR while already trending up and pulling toward
         # the fast EMA (continuation entry).
-        pullback = in_uptrend and close.iloc[-1] <= fast.iloc[-1] * 1.01
+        pullback = in_uptrend and close.iloc[-1] <= fast_now * 1.01
         if (crossed_up or pullback) and trending:
-            why = f"EMA{self.fast}>{self.slow}, ADX={adx.iloc[-1]:.0f}"
+            why = f"EMA{self.fast}>{self.slow}, ADX={adx_now:.0f}"
             return _bracket(symbol, self.name, close.iloc[-1], a,
                             self.stop_mult, self.rr, why)
         return None
@@ -129,26 +169,45 @@ class MeanReversion(Strategy):
     def min_bars(self):
         return self.trend_ma + self.atr_period + 5
 
-    def evaluate(self, symbol, df):
+    def precompute(self, df):
+        close = df["close"]
+        _, _, lower = ind.bollinger(close, self.bb_period)
+        return {
+            "rsi": ind.rsi(close, self.rsi_period),
+            "lower_bb": lower,
+            "trend_ma": ind.sma(close, self.trend_ma),
+            "atr": ind.atr(df, self.atr_period),
+            "weekly_aligned": ind.weekly_ema_aligned_series(df),
+        }
+
+    def evaluate(self, symbol, df, cache=None):
         if len(df) < self.min_bars():
             return None
-        if not self._weekly_aligned(df):
+        if not self._weekly_aligned(df, cache):
             return None
         close = df["close"]
-        rsi = ind.rsi(close, self.rsi_period)
-        _, _, lower = ind.bollinger(close, self.bb_period)
-        long_trend = ind.sma(close, self.trend_ma)
-        a = ind.atr(df, self.atr_period).iloc[-1]
+        d = df.index[-1]
+        if cache:
+            rsi_now = cache["rsi"].loc[d]
+            lower_now = cache["lower_bb"].loc[d]
+            trend_now = cache["trend_ma"].loc[d]
+            a = cache["atr"].loc[d]
+        else:
+            rsi_now = ind.rsi(close, self.rsi_period).iloc[-1]
+            _, _, lower = ind.bollinger(close, self.bb_period)
+            lower_now = lower.iloc[-1]
+            trend_now = ind.sma(close, self.trend_ma).iloc[-1]
+            a = ind.atr(df, self.atr_period).iloc[-1]
 
         # Only buy dips that are still ABOVE the long-term trend (buy weakness in
         # an uptrend, never catch a falling knife in a downtrend).
-        uptrend = close.iloc[-1] > long_trend.iloc[-1]
-        oversold = rsi.iloc[-1] <= self.rsi_buy
-        below_band = close.iloc[-1] <= lower.iloc[-1]
+        uptrend = close.iloc[-1] > trend_now
+        oversold = rsi_now <= self.rsi_buy
+        below_band = close.iloc[-1] <= lower_now
         # Higher low confirms the dip is stabilising, not continuing lower.
         higher_low = df["low"].iloc[-1] > df["low"].iloc[-2]
         if uptrend and oversold and below_band and higher_low:
-            why = f"RSI={rsi.iloc[-1]:.0f}, below lower BB, > MA{self.trend_ma}, higher low"
+            why = f"RSI={rsi_now:.0f}, below lower BB, > MA{self.trend_ma}, higher low"
             return _bracket(symbol, self.name, close.iloc[-1], a,
                             self.stop_mult, self.rr, why)
         return None
@@ -164,19 +223,37 @@ class Breakout(Strategy):
     def min_bars(self):
         return self.channel + self.atr_period + 5
 
-    def evaluate(self, symbol, df):
+    def precompute(self, df):
+        upper, _ = ind.donchian(df, self.channel)
+        return {
+            "donchian_upper": upper,  # look up at yesterday's date - see evaluate()
+            "atr": ind.atr(df, self.atr_period),
+            "vol_avg": df["volume"].rolling(self.vol_period).mean(),
+            "weekly_aligned": ind.weekly_ema_aligned_series(df),
+        }
+
+    def evaluate(self, symbol, df, cache=None):
         if len(df) < self.min_bars():
             return None
-        if not self._weekly_aligned(df):
+        if not self._weekly_aligned(df, cache):
             return None
         close = df["close"]
-        # Use the channel up to the PRIOR bar so today's bar can break it.
-        upper, _ = ind.donchian(df.iloc[:-1], self.channel)
-        a = ind.atr(df, self.atr_period).iloc[-1]
-        avg_vol = df["volume"].rolling(self.vol_period).mean().iloc[-1]
+        d, dp = df.index[-1], df.index[-2]
+        if cache:
+            # Full-df donchian at yesterday's date == donchian(df.iloc[:-1]) last
+            # value in the windowed version (both are "channel-day high ending
+            # yesterday", today deliberately excluded so today's bar can break it).
+            upper_now = cache["donchian_upper"].loc[dp]
+            a = cache["atr"].loc[d]
+            avg_vol = cache["vol_avg"].loc[d]
+        else:
+            upper, _ = ind.donchian(df.iloc[:-1], self.channel)
+            upper_now = upper.iloc[-1]
+            a = ind.atr(df, self.atr_period).iloc[-1]
+            avg_vol = df["volume"].rolling(self.vol_period).mean().iloc[-1]
         vol_ok = df["volume"].iloc[-1] >= self.vol_mult * avg_vol
 
-        broke_out = close.iloc[-1] > upper.iloc[-1]
+        broke_out = close.iloc[-1] > upper_now
         if broke_out and vol_ok:
             why = f"Close>{self.channel}d-high on {df['volume'].iloc[-1]/avg_vol:.1f}x vol"
             return _bracket(symbol, self.name, close.iloc[-1], a,
@@ -204,27 +281,50 @@ class DividendMomentum(Strategy):
     def min_bars(self):
         return self.slow + self.atr_period + 5
 
-    def evaluate(self, symbol, df):
+    def precompute(self, df):
+        close = df["close"]
+        return {
+            "fast": ind.ema(close, self.fast),
+            "slow": ind.ema(close, self.slow),
+            "adx": ind.adx(df, 14),
+            "rsi": ind.rsi(close, 14),
+            "atr": ind.atr(df, self.atr_period),
+            "weekly_aligned": ind.weekly_ema_aligned_series(df),
+        }
+
+    def evaluate(self, symbol, df, cache=None):
         if len(df) < self.min_bars():
             return None
-        if not self._weekly_aligned(df):
+        if not self._weekly_aligned(df, cache):
             return None
         close = df["close"]
-        fast = ind.ema(close, self.fast)
-        slow = ind.ema(close, self.slow)
-        adx_val = ind.adx(df, 14)
-        rsi_val = ind.rsi(close, 14)
-        a = ind.atr(df, self.atr_period).iloc[-1]
+        d, dp = df.index[-1], df.index[-2]
+        if cache:
+            fast_now, fast_prev = cache["fast"].loc[d], cache["fast"].loc[dp]
+            slow_now, slow_prev = cache["slow"].loc[d], cache["slow"].loc[dp]
+            adx_now = cache["adx"].loc[d]
+            rsi_now = cache["rsi"].loc[d]
+            a = cache["atr"].loc[d]
+        else:
+            fast = ind.ema(close, self.fast)
+            slow = ind.ema(close, self.slow)
+            adx_val = ind.adx(df, 14)
+            rsi_val = ind.rsi(close, 14)
+            fast_now, fast_prev = fast.iloc[-1], fast.iloc[-2]
+            slow_now, slow_prev = slow.iloc[-1], slow.iloc[-2]
+            adx_now = adx_val.iloc[-1]
+            rsi_now = rsi_val.iloc[-1]
+            a = ind.atr(df, self.atr_period).iloc[-1]
 
-        in_uptrend = fast.iloc[-1] > slow.iloc[-1] and close.iloc[-1] > slow.iloc[-1]
-        crossed_up = fast.iloc[-2] <= slow.iloc[-2] and fast.iloc[-1] > slow.iloc[-1]
-        trending = adx_val.iloc[-1] >= self.adx_min
-        not_overbought = rsi_val.iloc[-1] < self.rsi_max
-        pullback = in_uptrend and close.iloc[-1] <= fast.iloc[-1] * 1.02
+        in_uptrend = fast_now > slow_now and close.iloc[-1] > slow_now
+        crossed_up = fast_prev <= slow_prev and fast_now > slow_now
+        trending = adx_now >= self.adx_min
+        not_overbought = rsi_now < self.rsi_max
+        pullback = in_uptrend and close.iloc[-1] <= fast_now * 1.02
 
         if (crossed_up or pullback) and trending and not_overbought:
-            why = (f"EMA{self.fast}>{self.slow}, ADX={adx_val.iloc[-1]:.0f}, "
-                   f"RSI={rsi_val.iloc[-1]:.0f} (div play)")
+            why = (f"EMA{self.fast}>{self.slow}, ADX={adx_now:.0f}, "
+                   f"RSI={rsi_now:.0f} (div play)")
             return _bracket(symbol, self.name, close.iloc[-1], a,
                             self.stop_mult, self.rr, why)
         return None
@@ -252,27 +352,46 @@ class EMAPullback(Strategy):
     def min_bars(self):
         return self.ema3 + self.atr_period + 5
 
-    def evaluate(self, symbol, df):
+    def precompute(self, df):
+        close = df["close"]
+        return {
+            "e1": ind.ema(close, self.ema1),
+            "e2": ind.ema(close, self.ema2),
+            "e3": ind.ema(close, self.ema3),
+            "rsi": ind.rsi(close, 14),
+            "atr": ind.atr(df, self.atr_period),
+            "vol_avg": df["volume"].rolling(20).mean(),
+            "weekly_aligned": ind.weekly_ema_aligned_series(df),
+        }
+
+    def evaluate(self, symbol, df, cache=None):
         if len(df) < self.min_bars():
             return None
-        if not self._weekly_aligned(df):
+        if not self._weekly_aligned(df, cache):
             return None
         close = df["close"]
-        e1 = ind.ema(close, self.ema1)
-        e2 = ind.ema(close, self.ema2)
-        e3 = ind.ema(close, self.ema3)
-        rsi_val = ind.rsi(close, 14)
-        a = ind.atr(df, self.atr_period).iloc[-1]
-        avg_vol = df["volume"].rolling(20).mean().iloc[-1]
+        d = df.index[-1]
+        if cache:
+            e1_now, e2_now, e3_now = cache["e1"].loc[d], cache["e2"].loc[d], cache["e3"].loc[d]
+            rsi_now = cache["rsi"].loc[d]
+            a = cache["atr"].loc[d]
+            avg_vol = cache["vol_avg"].loc[d]
+        else:
+            e1_now = ind.ema(close, self.ema1).iloc[-1]
+            e2_now = ind.ema(close, self.ema2).iloc[-1]
+            e3_now = ind.ema(close, self.ema3).iloc[-1]
+            rsi_now = ind.rsi(close, 14).iloc[-1]
+            a = ind.atr(df, self.atr_period).iloc[-1]
+            avg_vol = df["volume"].rolling(20).mean().iloc[-1]
 
-        aligned = e1.iloc[-1] > e2.iloc[-1] > e3.iloc[-1]
-        near_ema = abs(close.iloc[-1] - e1.iloc[-1]) <= a
-        rsi_ok = self.rsi_lo <= rsi_val.iloc[-1] <= self.rsi_hi
+        aligned = e1_now > e2_now > e3_now
+        near_ema = abs(close.iloc[-1] - e1_now) <= a
+        rsi_ok = self.rsi_lo <= rsi_now <= self.rsi_hi
         low_vol = df["volume"].iloc[-1] < avg_vol  # quiet pullback, not distribution
 
         if aligned and near_ema and rsi_ok and low_vol:
             why = (f"EMA{self.ema1}>{self.ema2}>{self.ema3}, "
-                   f"pullback RSI={rsi_val.iloc[-1]:.0f}, low vol")
+                   f"pullback RSI={rsi_now:.0f}, low vol")
             return _bracket(symbol, self.name, close.iloc[-1], a,
                             self.stop_mult, self.rr, why)
         return None
@@ -299,15 +418,32 @@ class Breakout52w(Strategy):
     def min_bars(self):
         return self.lookback + self.atr_period + 5
 
-    def evaluate(self, symbol, df):
+    def precompute(self, df):
+        return {
+            "prior_high_roll": df["high"].rolling(self.lookback).max(),
+            "atr": ind.atr(df, self.atr_period),
+            "vol_avg": df["volume"].rolling(self.vol_period).mean(),
+            "weekly_aligned": ind.weekly_ema_aligned_series(df),
+        }
+
+    def evaluate(self, symbol, df, cache=None):
         if len(df) < self.min_bars():
             return None
-        if not self._weekly_aligned(df):
+        if not self._weekly_aligned(df, cache):
             return None
         close = df["close"]
-        prior_high = df["high"].iloc[-(self.lookback + 1):-1].max()
-        a = ind.atr(df, self.atr_period).iloc[-1]
-        avg_vol = df["volume"].rolling(self.vol_period).mean().iloc[-1]
+        d, dp = df.index[-1], df.index[-2]
+        if cache:
+            # rolling(lookback).max() at yesterday's date == the same
+            # lookback-day window ending yesterday (today excluded) that the
+            # windowed slice computes.
+            prior_high = cache["prior_high_roll"].loc[dp]
+            a = cache["atr"].loc[d]
+            avg_vol = cache["vol_avg"].loc[d]
+        else:
+            prior_high = df["high"].iloc[-(self.lookback + 1):-1].max()
+            a = ind.atr(df, self.atr_period).iloc[-1]
+            avg_vol = df["volume"].rolling(self.vol_period).mean().iloc[-1]
         vol_ok = df["volume"].iloc[-1] >= self.vol_mult * avg_vol
 
         if close.iloc[-1] > prior_high and vol_ok:
@@ -348,20 +484,36 @@ class RSI2Reversion(Strategy):
     def min_bars(self):
         return self.trend_ma + self.atr_period + 5
 
-    def evaluate(self, symbol, df):
+    def precompute(self, df):
+        close = df["close"]
+        return {
+            "rsi": ind.rsi(close, self.rsi_period),
+            "long_trend": ind.sma(close, self.trend_ma),
+            "short_ma": ind.sma(close, self.stretch_ma),
+            "atr": ind.atr(df, self.atr_period),
+        }
+
+    def evaluate(self, symbol, df, cache=None):
         if len(df) < self.min_bars():
             return None
         close = df["close"]
-        rsi_fast = ind.rsi(close, self.rsi_period)
-        long_trend = ind.sma(close, self.trend_ma)
-        short_ma = ind.sma(close, self.stretch_ma)
-        a = ind.atr(df, self.atr_period).iloc[-1]
+        d = df.index[-1]
+        if cache:
+            rsi_now = cache["rsi"].loc[d]
+            long_trend_now = cache["long_trend"].loc[d]
+            short_ma_now = cache["short_ma"].loc[d]
+            a = cache["atr"].loc[d]
+        else:
+            rsi_now = ind.rsi(close, self.rsi_period).iloc[-1]
+            long_trend_now = ind.sma(close, self.trend_ma).iloc[-1]
+            short_ma_now = ind.sma(close, self.stretch_ma).iloc[-1]
+            a = ind.atr(df, self.atr_period).iloc[-1]
 
-        uptrend = close.iloc[-1] > long_trend.iloc[-1]
-        oversold = rsi_fast.iloc[-1] <= self.rsi_buy
-        stretched = close.iloc[-1] < short_ma.iloc[-1]
+        uptrend = close.iloc[-1] > long_trend_now
+        oversold = rsi_now <= self.rsi_buy
+        stretched = close.iloc[-1] < short_ma_now
         if uptrend and oversold and stretched:
-            why = (f"RSI({self.rsi_period})={rsi_fast.iloc[-1]:.0f}, "
+            why = (f"RSI({self.rsi_period})={rsi_now:.0f}, "
                    f"below MA{self.stretch_ma}, > MA{self.trend_ma}")
             return _bracket(symbol, self.name, close.iloc[-1], a,
                             self.stop_mult, self.rr, why)
