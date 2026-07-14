@@ -14,6 +14,7 @@ import subprocess
 from datetime import date
 
 from .config import settings
+from . import journal
 
 PASS = "✅"
 FAIL = "❌"
@@ -75,6 +76,13 @@ def run() -> bool:
             mx = settings.max_open_positions
             print(f"  {INFO} {n}/{mx} positions open")
 
+            # Original stop per symbol, from the journal — trail.py deliberately
+            # never updates this so R-multiples keep the ORIGINAL-risk
+            # denominator. Using the live (possibly trail-ratcheted) stop here
+            # instead flips the sign once a stop is raised above entry to lock
+            # in profit, showing a nonsensical negative R on a winning position.
+            original_stops = {o["symbol"]: o["stop"] for o in journal.fetch_open_orders()}
+
             for p in positions:
                 sym = p.symbol
                 entry = float(p.avg_entry_price)
@@ -93,7 +101,8 @@ def run() -> bool:
                 ]
                 if active_stops:
                     stop_px = float(active_stops[0].stop_price)
-                    risk_r = (current - entry) / (entry - stop_px) if entry != stop_px else 0
+                    risk_stop = original_stops.get(sym, stop_px)
+                    risk_r = (current - entry) / (entry - risk_stop) if entry != risk_stop else 0
                     print(f"  {PASS} {sym}: entry=${entry:.2f}  now=${current:.2f} ({pnl_pct:+.1f}%)  stop=${stop_px:.2f}  R={risk_r:+.2f}")
                 else:
                     print(f"  {FAIL} {sym}: entry=${entry:.2f}  now=${current:.2f} ({pnl_pct:+.1f}%)  — NO ACTIVE STOP FOUND")
