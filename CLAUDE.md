@@ -309,15 +309,18 @@ Per user instruction (2026-07-01): watch for SPCX to reclaim the prior entry pri
 
 **Reclaim confirmation added 2026-07-09 (commit `f4171d0`):** the $163.62 trigger whipsawed twice on 2026-07-06 (both reclaims above reversed within hours for a quick stop-out loss), showing the level acts as resistance rather than a clean breakout. `watch_spcx.py` now persists a first-seen-at-or-above-trigger timestamp (`spcx_watch_state.json`, gitignored) across cron runs and only buys once price has held at/above $163.62 for `CONFIRM_MINUTES` (30) of real wall-clock time; any dip back below the trigger resets the clock. Given the hourly cron cadence, this means a reclaim must survive at least one more scheduled check before triggering a buy. Trigger price itself (`$163.62`) is unchanged — this only adds a holding-period gate before acting on it.
 
-## Current focused universe (as of 2026-07-13 ~10 AM ET, market open)
+## Current focused universe (as of 2026-07-14 ~8:45 AM ET, pre-market)
 
-Active portfolio: **EPD, ET, SOFI** (swing only — no open ORB/PENG-style positions). `MAX_OPEN_POSITIONS=8` — 3/8. Combined unrealized ~+$84.
+Active portfolio: **EPD, ET** (swing only). `MAX_OPEN_POSITIONS=8` — 2/8, 1 slot freed up by SOFI's stop-out. Combined unrealized ~+$76.68.
 
 | Symbol | Entry | Notes |
 |---|---|---|
-| ET | $19.47 | Energy Transfer. Dividend momentum. 72 shares. Engine auto-entry 2026-07-06 (CLEAN verdict). |
+| ET | $19.47 | Energy Transfer. Dividend momentum. 72 shares. Engine auto-entry 2026-07-06 (CLEAN verdict). Trail ratcheted stop $18.76→$19.83 (+1.1R) 2026-07-13. |
 | EPD | $37.75 | Enterprise Products Partners. Dividend momentum. 36 shares. Engine auto-entry 2026-07-08. |
-| SOFI | $17.45 | SoFi. Trend momentum. 36 shares. Engine auto-entry 2026-07-08. Currently the strongest performer, +~9%. |
+
+**SOFI stopped out 2026-07-13 at 4:02 PM ET** — exit $18.48 (the ratcheted trail stop, not the original $16.11 bracket stop), entry $17.49, 36 shares → **+$35.64 (+0.72R)**. Trail had ratcheted the stop $16.11→$18.48 earlier that day at +1.4R; price pulled back into the close and tagged the trailed level instead of giving back the full gain — confirms the trail ratchet converting a pullback into a locked-in win rather than a round-trip to breakeven/loss.
+
+**AGEN ORB trade closed 2026-07-13** (intraday, not swing) — 53 shares @ $5.88 entry, scaled out half (26 sh) at the 2:1 target $7.90, remainder trailed and stopped at $6.56 → **+$70.85 total** (journal logs +0.0R on the residual leg due to scale-out R-math, but net was a clear winner).
 
 **GOOG and PENG both closed 2026-07-10** (no auto-executed replacements since — the 2026-07-13 engine run's top candidates BB/RLAY/USAR all lacked CLEAN verdicts and were skipped/vetoed):
 - **PENG** (the ORB position adopted into the swing journal after the 2026-07-09 stuck-order incident, see below) — stopped out at $77.80, entry $68.70, 12 shares → **+$109.20 (+2.06R)**. Confirms the `trail.py` ratchet worked end-to-end on an adopted ORB position.
