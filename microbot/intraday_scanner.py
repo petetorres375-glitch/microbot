@@ -21,6 +21,7 @@ from typing import Dict, List, Optional
 from zoneinfo import ZoneInfo
 
 import yfinance as yf
+from yfinance._http import new_session
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockSnapshotRequest
 
@@ -93,26 +94,39 @@ def _get_yf_data(symbol: str, timeout: float = YF_TIMEOUT_SECS) -> dict:
     Uses a plain daemon Thread (not ThreadPoolExecutor): a pool's shutdown() joins
     its worker threads on exit, which would re-block forever on a truly hung call.
     A daemon thread is simply abandoned — no join, no blocking process exit.
+
+    The abandoned thread's own yfinance session is explicitly closed on timeout
+    (not just left to the thread) — otherwise its underlying socket leaks in
+    CLOSE-WAIT for as long as the stuck call keeps the thread (and the session
+    object it holds) alive, which can be indefinitely. Session.close() is safe
+    to call from outside the thread mid-request; any exception it triggers in
+    the abandoned call is swallowed by _get_yf_data_impl's own try/except.
     """
     default = {"rel_volume": 0.0, "float_shares": None}
     holder: dict = {}
-    t = threading.Thread(target=lambda: holder.update(data=_get_yf_data_impl(symbol)),
+    session = new_session()
+    t = threading.Thread(target=lambda: holder.update(data=_get_yf_data_impl(symbol, session)),
                           daemon=True)
     t.start()
     t.join(timeout)
     if t.is_alive():
         print(f"  yfinance timeout ({timeout:.0f}s) on {symbol} — skipping")
+        try:
+            session.close()
+        except Exception:
+            pass
         return default
+    session.close()
     return holder.get("data", default)
 
 
-def _get_yf_data_impl(symbol: str) -> dict:
+def _get_yf_data_impl(symbol: str, session) -> dict:
     result = {"rel_volume": 0.0, "float_shares": None}
     try:
         now_et = datetime.datetime.now(ZoneInfo("America/New_York"))
         market_open = now_et.replace(hour=9, minute=30, second=0, microsecond=0)
         elapsed_minutes = max(1.0, (now_et - market_open).total_seconds() / 60)
-        tk = yf.Ticker(symbol)
+        tk = yf.Ticker(symbol, session=session)
         avg = tk.fast_info.three_month_average_volume
         if avg and avg > 0:
             hist = tk.history(period="1d", interval="1m")
