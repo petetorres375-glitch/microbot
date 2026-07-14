@@ -33,6 +33,7 @@
     "TSLA": "CAUTION",
     "AMZN": "CLEAN",
     "GOOG": "CAUTION",
-    "SHOP": "CAUTION"
+    "SHOP": "CAUTION",
+    "RLAY": "CLEAN"
   }
 }
