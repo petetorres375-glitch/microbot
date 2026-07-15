@@ -322,6 +322,8 @@ Per user instruction (2026-07-01): watch for SPCX to reclaim the prior entry pri
 
 ## Current focused universe (as of 2026-07-14 ~10 AM ET, market open)
 
+**`ema_pullback` paused 2026-07-15** via `DISABLED_STRATEGIES=ema_pullback` in `.env` (mechanism: `settings.disabled_strategies`, checked in `build_default_strategies()`/`build_strategies_from_params()` in `microbot/strategies.py`, commit `pending`). Reason: worst-performing strategy in the journal (14% win rate, −0.80R expectancy, −$277.85 over 7 trades) and the optimizer structurally can't tune it — see "Optimizer params updated 2026-07-13" correction below. Blocks new signals only; existing positions opened by this strategy (RLAY, entered 2026-07-14) are unaffected and still managed normally by `trail.py`. `.env` is gitignored, so this pause is local-machine-only — doesn't need a push to take effect, but won't survive a fresh `.env` setup elsewhere. To resume: remove `ema_pullback` from `DISABLED_STRATEGIES` (or delete the line).
+
 Active portfolio: **EPD, ET, HOOD, RLAY** (swing only). `MAX_OPEN_POSITIONS=8` — 4/8, 4 slots open.
 
 | Symbol | Entry | Notes |

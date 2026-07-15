@@ -28,6 +28,7 @@ from typing import Optional
 import pandas as pd
 
 from . import indicators as ind
+from .config import settings
 
 
 @dataclass
@@ -533,7 +534,7 @@ ALL_STRATEGIES = {
 
 
 def build_default_strategies(rr: float = 2.0):
-    return [
+    strats = [
         TrendMomentum(rr=rr),
         MeanReversion(rr=rr),
         Breakout(rr=rr),
@@ -541,6 +542,7 @@ def build_default_strategies(rr: float = 2.0):
         Breakout52w(rr=rr),
         RSI2Reversion(),  # keeps its own validated 1:1 / 3x ATR bracket — do not pass rr
     ]
+    return [s for s in strats if s.name not in settings.disabled_strategies]
 
 
 def build_dividend_strategies(rr: float = 2.0):
@@ -559,12 +561,14 @@ def build_strategies_from_params(active: dict, rr: float = 2.0,
         return cls(rr=rr, **active.get(cls.name, {}))
 
     if dividend:
-        return [_make(DividendMomentum), _make(TrendMomentum), _make(MeanReversion)]
-    return [
-        _make(TrendMomentum),
-        _make(MeanReversion),
-        _make(Breakout),
-        _make(EMAPullback),
-        _make(Breakout52w),
-        RSI2Reversion(**active.get(RSI2Reversion.name, {})),  # own rr — see class docstring
-    ]
+        strats = [_make(DividendMomentum), _make(TrendMomentum), _make(MeanReversion)]
+    else:
+        strats = [
+            _make(TrendMomentum),
+            _make(MeanReversion),
+            _make(Breakout),
+            _make(EMAPullback),
+            _make(Breakout52w),
+            RSI2Reversion(**active.get(RSI2Reversion.name, {})),  # own rr — see class docstring
+        ]
+    return [s for s in strats if s.name not in settings.disabled_strategies]

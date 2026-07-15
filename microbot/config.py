@@ -65,6 +65,12 @@ class Settings:
     # Set to false to exclude dividend stocks from the scan.
     include_dividend_stocks: bool = field(default_factory=lambda: _bool("INCLUDE_DIVIDEND_STOCKS", "true"))
 
+    # Comma-separated strategy names to exclude from signal generation (e.g. "ema_pullback").
+    # Existing positions and their stops/targets are unaffected — this only blocks new entries.
+    disabled_strategies: set = field(default_factory=lambda: {
+        s.strip().lower() for s in os.getenv("DISABLED_STRATEGIES", "").split(",") if s.strip()
+    })
+
     # --- Post-split universe: high-momentum names that are now affordable
     # after large splits. NVDA (10:1), TSLA, AMZN (20:1), GOOG (20:1), SHOP (10:1).
     split_universe: List[str] = field(default_factory=lambda: os.getenv(
