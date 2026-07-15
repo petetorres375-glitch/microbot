@@ -4,17 +4,40 @@ run_intraday.py
 Day trading entry point. Runs the pre-market scanner then the ORB engine.
 
 Usage:
-    python run_intraday.py            # scan + trade
+    python run_intraday.py            # scan + trade (reuses today's cached scan if fresh)
+    python run_intraday.py --rescan     # force a fresh scan instead of the cache
     python run_intraday.py --scan-only  # just print candidates, no trading
 """
 import argparse
+import datetime
+import json
 import os
 import sys
 
-from microbot.intraday_scanner import scan
+from microbot.intraday_scanner import scan, CANDIDATES_FILE
 from microbot.intraday_engine import IntradayEngine
 
 LOCK_FILE = "intraday.lock"
+
+
+def _load_cached_candidates(top: int) -> list | None:
+    """Reuse the 9:15 AM cron's scan if it's from today, to avoid redoing the
+    slow yfinance float/rel-vol lookups in the 9:34 AM hot path — that re-scan
+    was delaying ORB entries by several minutes on slow-Yahoo mornings (2026-07-15:
+    AEHR entry landed 6 min after the opening range closed, chasing an already
+    extended move). The opening range itself is always computed from live Alpaca
+    bars regardless of candidate source, so a slightly stale watchlist doesn't
+    affect entry/stop accuracy.
+    """
+    try:
+        with open(CANDIDATES_FILE) as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return None
+    if data.get("date") != datetime.date.today().isoformat():
+        return None
+    candidates = data.get("candidates") or []
+    return candidates[:top] if candidates else None
 
 
 def _acquire_lock() -> bool:
@@ -47,10 +70,16 @@ def main():
                    help="Run scanner and print candidates without trading")
     p.add_argument("--top", type=int, default=5,
                    help="Max candidates to surface (default: 5)")
+    p.add_argument("--rescan", action="store_true",
+                   help="Force a fresh scan instead of reusing today's cached candidates")
     args = p.parse_args()
 
-    print("=== Pre-market gap scan ===")
-    candidates = scan(top=args.top)
+    candidates = None if args.rescan else _load_cached_candidates(args.top)
+    if candidates is not None:
+        print(f"=== Using cached candidates from today's earlier scan ({CANDIDATES_FILE}) ===")
+    else:
+        print("=== Pre-market gap scan ===")
+        candidates = scan(top=args.top)
 
     if not candidates:
         print("No qualifying candidates today. Nothing to trade.")
