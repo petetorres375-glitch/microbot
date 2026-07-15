@@ -7,7 +7,8 @@ and queues any improvements as proposals for your review. Nothing is
 promoted automatically.
 
 Usage:
-    python run_optimizer.py               # full universe
+    python run_optimizer.py               # full universe, all strategies
+    python run_optimizer.py --strategy ema_pullback [--strategy breakout_52w]  # just these
     python run_optimizer.py --list        # just show pending proposals, no run
 
 Review proposals after:
@@ -27,6 +28,8 @@ PROPOSALS_FILE = os.path.join(os.path.dirname(__file__), "optimizer_proposals.js
 parser = argparse.ArgumentParser()
 parser.add_argument("--list", action="store_true",
                     help="list pending proposals and exit without running")
+parser.add_argument("--strategy", action="append", dest="strategies",
+                    help="limit the run to this strategy (repeatable). Default: all strategies.")
 args = parser.parse_args()
 
 journal.init()
@@ -40,7 +43,7 @@ if args.list:
         print(f"#{p['id']}  {p['strategy']}  +{p['improvement_pct']:.1f}% OOS  "
               f"params: {json.dumps(proposed)}")
 else:
-    proposals = run_optimization()
+    proposals = run_optimization(strategies=args.strategies)
 
     # Write proposals to a JSON file so remote runs can push them back to the
     # repo and the user can import them locally via import_proposals.py.

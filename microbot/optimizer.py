@@ -165,14 +165,17 @@ def _full_universe() -> List[str]:
 
 
 def run_optimization(universe: List[str] | None = None,
-                     rr: float | None = None) -> List[Dict]:
+                     rr: float | None = None,
+                     strategies: List[str] | None = None) -> List[Dict]:
     """
-    Download bars, run walk-forward grid search for all strategies, save
-    proposals to the DB. Returns the list of proposals created this run.
+    Download bars, run walk-forward grid search for all strategies (or just
+    `strategies` if given), save proposals to the DB. Returns the list of
+    proposals created this run.
     """
     journal.init()
     universe = universe or _full_universe()
     rr = rr or settings.reward_risk_ratio
+    grid_names = [s for s in PARAM_GRIDS if strategies is None or s in strategies]
 
     print(f"\n=== microbot optimizer | {len(universe)} symbols ===")
     md = MarketData()
@@ -198,7 +201,7 @@ def run_optimization(universe: List[str] | None = None,
     active = journal.fetch_active_params()
     proposals_created: List[Dict] = []
 
-    for strat_name in PARAM_GRIDS:
+    for strat_name in grid_names:
         current_params = active.get(strat_name, _default_params(strat_name))
         result = _optimize_one(strat_name, df_is, df_oos, rr, current_params)
         if result is None:
