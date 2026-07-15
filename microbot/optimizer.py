@@ -28,7 +28,7 @@ from . import metrics
 from . import notify
 from .config import settings
 from .strategies import (
-    TrendMomentum, MeanReversion, Breakout, DividendMomentum, Strategy,
+    TrendMomentum, MeanReversion, Breakout, DividendMomentum, EMAPullback, Strategy,
 )
 
 # Minimum OOS improvement over current params to bother creating a proposal.
@@ -63,6 +63,12 @@ PARAM_GRIDS: Dict[str, Dict] = {
         "adx_min":   [10, 15, 20],
         "stop_mult": [1.5, 2.0, 2.5],
     },
+    EMAPullback.name: {
+        "ema1":      [13, 21, 34],
+        "ema2":      [40, 50, 65],
+        "rsi_lo":    [30, 38, 45],
+        "stop_mult": [1.0, 1.5, 2.0],
+    },
 }
 
 STRATEGY_CLASSES = {
@@ -70,6 +76,7 @@ STRATEGY_CLASSES = {
     MeanReversion.name:    MeanReversion,
     Breakout.name:         Breakout,
     DividendMomentum.name: DividendMomentum,
+    EMAPullback.name:      EMAPullback,
 }
 
 
