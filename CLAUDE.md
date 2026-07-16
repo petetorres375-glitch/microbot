@@ -70,20 +70,22 @@ CCR routines handle analysis and research. **Execution (actual order placement) 
 ```
 # crontab -l
 SHELL=/bin/bash
-50 8 * * 1-5 cd /home/lenovo-home/microbot && source .venv/bin/activate && python fetch_verdicts.py >> /home/lenovo-home/microbot/verdicts.log 2>&1
-35 9 * * 1-5 cd /home/lenovo-home/microbot && git pull --quiet && source .venv/bin/activate && python -m microbot.engine >> /home/lenovo-home/microbot/engine.log 2>&1
-34 9 * * 1-5 cd /home/lenovo-home/microbot && git pull --quiet && source .venv/bin/activate && python run_intraday.py >> /home/lenovo-home/microbot/intraday.log 2>&1
-36 9 * * 1-5 cd /home/lenovo-home/microbot && source .venv/bin/activate && python -m microbot.trail >> /home/lenovo-home/microbot/trail.log 2>&1
-30 10-15 * * 1-5 cd /home/lenovo-home/microbot && source .venv/bin/activate && python -m microbot.trail >> /home/lenovo-home/microbot/trail.log 2>&1
-0 16 * * 1-5 cd /home/lenovo-home/microbot && source .venv/bin/activate && python -m microbot.trail >> /home/lenovo-home/microbot/trail.log 2>&1
-36 9 * * 1-5 cd /home/lenovo-home/microbot && source .venv/bin/activate && python watch_spcx.py >> /home/lenovo-home/microbot/watch_spcx.log 2>&1
-30 10-15 * * 1-5 cd /home/lenovo-home/microbot && source .venv/bin/activate && python watch_spcx.py >> /home/lenovo-home/microbot/watch_spcx.log 2>&1
-0 16 * * 1-5 cd /home/lenovo-home/microbot && source .venv/bin/activate && python watch_spcx.py >> /home/lenovo-home/microbot/watch_spcx.log 2>&1
-41 9 * * 1-5 cd /home/lenovo-home/microbot && git pull --quiet && source .venv/bin/activate && python run_research.py >> /home/lenovo-home/microbot/research.log 2>&1
-0 6 * * 1 cd /home/lenovo-home/microbot && git pull --quiet && source .venv/bin/activate && python run_optimizer.py >> /home/lenovo-home/microbot/optimizer.log 2>&1
-*/10 9-16 * * 1-5 cd /home/lenovo-home/microbot && source .venv/bin/activate && python check_positions.py >> /home/lenovo-home/microbot/positions.log 2>&1
-15 9 * * 1-5 cd /home/lenovo-home/microbot && git pull --quiet && source .venv/bin/activate && python -m microbot.intraday_scanner >> /home/lenovo-home/microbot/intraday_scanner.log 2>&1
+50 8 * * 1-5 cd /home/lenovo-home/microbot && source .venv/bin/activate && python -u fetch_verdicts.py >> /home/lenovo-home/microbot/verdicts.log 2>&1
+35 9 * * 1-5 cd /home/lenovo-home/microbot && git pull --quiet && source .venv/bin/activate && python -u -m microbot.engine >> /home/lenovo-home/microbot/engine.log 2>&1
+34 9 * * 1-5 cd /home/lenovo-home/microbot && git pull --quiet && source .venv/bin/activate && python -u run_intraday.py >> /home/lenovo-home/microbot/intraday.log 2>&1
+36 9 * * 1-5 cd /home/lenovo-home/microbot && source .venv/bin/activate && python -u -m microbot.trail >> /home/lenovo-home/microbot/trail.log 2>&1
+30 10-15 * * 1-5 cd /home/lenovo-home/microbot && source .venv/bin/activate && python -u -m microbot.trail >> /home/lenovo-home/microbot/trail.log 2>&1
+0 16 * * 1-5 cd /home/lenovo-home/microbot && source .venv/bin/activate && python -u -m microbot.trail >> /home/lenovo-home/microbot/trail.log 2>&1
+36 9 * * 1-5 cd /home/lenovo-home/microbot && source .venv/bin/activate && python -u watch_spcx.py >> /home/lenovo-home/microbot/watch_spcx.log 2>&1
+30 10-15 * * 1-5 cd /home/lenovo-home/microbot && source .venv/bin/activate && python -u watch_spcx.py >> /home/lenovo-home/microbot/watch_spcx.log 2>&1
+0 16 * * 1-5 cd /home/lenovo-home/microbot && source .venv/bin/activate && python -u watch_spcx.py >> /home/lenovo-home/microbot/watch_spcx.log 2>&1
+41 9 * * 1-5 cd /home/lenovo-home/microbot && git pull --quiet && source .venv/bin/activate && python -u run_research.py >> /home/lenovo-home/microbot/research.log 2>&1
+0 6 * * 1 cd /home/lenovo-home/microbot && git pull --quiet && source .venv/bin/activate && python -u run_optimizer.py >> /home/lenovo-home/microbot/optimizer.log 2>&1
+*/10 9-16 * * 1-5 cd /home/lenovo-home/microbot && source .venv/bin/activate && python -u check_positions.py >> /home/lenovo-home/microbot/positions.log 2>&1
+15 9 * * 1-5 cd /home/lenovo-home/microbot && git pull --quiet && source .venv/bin/activate && python -u -m microbot.intraday_scanner >> /home/lenovo-home/microbot/intraday_scanner.log 2>&1
 ```
+
+**All cron jobs run with `python -u` (unbuffered stdout), added 2026-07-16.** Without `-u`, Python fully block-buffers stdout when it's redirected to a file (as every cron log line here is) instead of a terminal — a healthy, actively-running process can go an hour+ without a single byte hitting the log, since nothing flushes until the buffer fills or the process exits. This looks identical to a genuine hang from the outside. It caused a real false alarm the same day: `run_intraday.py` (started 9:34 AM) had written nothing to `intraday.log` by 11:00 AM, was killed as a suspected hang, and turned out to have been idling normally in its 30s poll loop past the 10:00 AM `ENTRY_CUTOFF` with no breakout candidates — confirmed via Alpaca's own order history (zero NXTC/OPRA/AEHR orders that day) that nothing was actually lost by the kill, but the diagnosis itself was wrong and the buffered log lines from that session were never flushed, so that session's blow-by-blow output is gone. `-u` makes every print land in the log in real time, so a stale log now reliably means "actually stuck," not "buffered." **Crontab isn't version-controlled** (see note below), so this change only lives in `crontab -l` on this machine — if the crontab is ever rebuilt from scratch, re-add `-u` to every `python` invocation or this exact false-hang trap recurs.
 
 `run_research.py` (added 2026-07-06) and `run_optimizer.py` (added 2026-07-06) run locally because their CCR routine equivalents are non-functional — `data.alpaca.markets` is blocked from the CCR sandbox, so neither can fetch bars there (see "CCR networking limitations" below). `run_research.py` runs weekdays at 9:41 AM ET (after the 9:34/9:35/9:36 engine/intraday/trail crons, to avoid API contention) and pushes the ranked Watchlist/LiveSignals/Positions/DailyTrades tabs to Google Sheets directly — no git push needed. `run_optimizer.py` runs Mondays at 6:00 AM ET, before market-hours crons start, and only writes `optimizer_proposals.json` locally; nothing auto-imports it — still run `python import_proposals.py && python -m microbot.approvals --params` manually per the self-improvement loop workflow below.
 
