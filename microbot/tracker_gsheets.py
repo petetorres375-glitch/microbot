@@ -524,27 +524,24 @@ def push_positions() -> bool:
 
 
 def push_daily_trades() -> bool:
-    """Write today's approved trades (status=submitted) to a DailyTrades tab."""
+    """Write today's submitted orders (CLEAN auto-executes + manual) to a DailyTrades tab."""
     if not settings.gsheet_id:
         return False
     try:
         from datetime import date
-        from .journal import fetch_approvals
+        from .journal import fetch_orders
 
         today = date.today().isoformat()
-        approvals = fetch_approvals(limit=200)
-        todays = [
-            a for a in approvals
-            if a.get("status") == "submitted" and (a.get("decided_ts") or "").startswith(today)
-        ]
+        orders = fetch_orders(limit=200)
+        todays = [o for o in orders if (o.get("ts") or "").startswith(today)]
 
         sh = _client().open_by_key(settings.gsheet_id)
         headers = ["Symbol", "Strategy", "Qty", "Entry", "Stop", "Target", "$ Risk", "Time"]
         ws = _retry_on_quota(lambda: _ensure_ws(sh, "DailyTrades", headers))
 
         rows = []
-        for a in sorted(todays, key=lambda x: x.get("decided_ts") or ""):
-            ts = a.get("decided_ts") or ""
+        for o in sorted(todays, key=lambda x: x.get("ts") or ""):
+            ts = o.get("ts") or ""
             try:
                 from datetime import datetime, timezone
                 dt = datetime.fromisoformat(ts).astimezone()
@@ -552,13 +549,13 @@ def push_daily_trades() -> bool:
             except Exception:
                 time_str = ts[:16]
             rows.append([
-                a["symbol"],
-                a["strategy"],
-                a["qty"],
-                round(float(a["entry"]), 2),
-                round(float(a["stop"]), 2),
-                round(float(a["target"]), 2),
-                round(float(a["dollar_risk"]), 2),
+                o["symbol"],
+                o["strategy"],
+                o["qty"],
+                round(float(o["entry"]), 2),
+                round(float(o["stop"]), 2),
+                round(float(o["target"]), 2),
+                round(float(o["dollar_risk"]), 2),
                 time_str,
             ])
 
