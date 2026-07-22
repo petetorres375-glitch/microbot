@@ -1,5 +1,5 @@
 {
-  "date": "2026-07-21",
+  "date": "2026-07-22",
   "verdicts": {
     "F": "CLEAN",
     "SOFI": "CLEAN",
@@ -20,7 +20,7 @@
     "RIG": "CLEAN",
     "CCL": "CLEAN",
     "KVUE": "CLEAN",
-    "GLD": "CAUTION",
+    "GLD": "CLEAN",
     "AEHR": "CLEAN",
     "PENG": "CLEAN",
     "RLAY": "CLEAN",
@@ -31,9 +31,9 @@
     "USAR": "CLEAN",
     "RDW": "CLEAN",
     "LUNR": "CLEAN",
-    "RGTI": "CAUTION",
-    "IONQ": "CAUTION",
-    "QBTS": "CAUTION",
+    "RGTI": "CLEAN",
+    "IONQ": "CLEAN",
+    "QBTS": "CLEAN",
     "QS": "CLEAN",
     "BBAI": "CLEAN",
     "WDFC": "CLEAN",
@@ -43,9 +43,9 @@
     "MO": "CLEAN",
     "EPD": "CLEAN",
     "NVDA": "CLEAN",
-    "TSLA": "CLEAN",
+    "TSLA": "AVOID",
     "AMZN": "CLEAN",
-    "GOOG": "CLEAN",
+    "GOOG": "AVOID",
     "SHOP": "CLEAN"
   }
 }
