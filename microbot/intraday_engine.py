@@ -488,27 +488,44 @@ class IntradayEngine:
         if not self._cancel_stop(s):
             print(f"  close deferred {sym}: stop still held")
             return False
+        exit_price = price
         if s.qty_remaining >= 1:
             try:
-                self.trading.submit_order(MarketOrderRequest(
+                sell_order = self.trading.submit_order(MarketOrderRequest(
                     symbol=sym, qty=s.qty_remaining,
                     side=OrderSide.SELL,
                     time_in_force=TimeInForce.DAY,
                 ))
-                s.realized_pnl += s.qty_remaining * (price - s.entry_price)
             except Exception as e:
                 print(f"  close failed {sym}: {e} — position NOT marked closed")
                 return False
-        self._finalize(sym, price, reason)
+            # Wait for fill (up to 10s) so PnL reflects the real execution
+            # price, not the pre-trade quote — a market order during a fast
+            # move (e.g. right after a daily-loss-limit trip) can fill well
+            # away from the quote used to trigger the close.
+            for _ in range(10):
+                try:
+                    filled = self.trading.get_order_by_id(sell_order.id)
+                    if filled.filled_avg_price:
+                        exit_price = float(filled.filled_avg_price)
+                        break
+                except Exception:
+                    pass
+                time.sleep(1)
+            s.realized_pnl += s.qty_remaining * (exit_price - s.entry_price)
+        self._finalize(sym, exit_price, reason)
         return True
 
-    def _eod_close_all(self, prices: Dict[str, float]):
-        print("3:55 PM — closing all intraday positions")
+    def _eod_close_all(self, prices: Dict[str, float], reason: str = "eod_close"):
+        if reason == "eod_close":
+            print("3:55 PM — closing all intraday positions")
+        else:
+            print(f"Closing all intraday positions ({reason})")
         for sym, s in self.states.items():
             if not (s.in_trade and not s.closed):
                 continue
             for attempt in range(5):
-                if self._close_position(sym, prices.get(sym, s.entry_price), "eod_close"):
+                if self._close_position(sym, prices.get(sym, s.entry_price), reason):
                     break
                 print(f"  retrying close {sym} ({attempt + 1}/5)...")
                 time.sleep(3)
@@ -578,7 +595,7 @@ class IntradayEngine:
             if daily_pnl <= loss_limit and not self._is_halted():
                 print(f"\nDaily loss limit hit (${daily_pnl:.2f}). Halting.")
                 self._halt()
-                self._eod_close_all(prices)
+                self._eod_close_all(prices, reason="daily_loss_halt")
                 break
 
             active = sum(1 for s in self.states.values()
