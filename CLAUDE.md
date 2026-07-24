@@ -328,14 +328,22 @@ Per user instruction (2026-07-01): watch for SPCX to reclaim the prior entry pri
 
 **`ema_pullback` paused 2026-07-15** via `DISABLED_STRATEGIES=ema_pullback` in `.env` (mechanism: `settings.disabled_strategies`, checked in `build_default_strategies()`/`build_strategies_from_params()` in `microbot/strategies.py`, commit `eaa10bf`). Reason: worst-performing strategy in the journal (14% win rate, −0.80R expectancy, −$277.85 over 7 trades) and the optimizer structurally can't tune it — see "Optimizer params updated 2026-07-13" correction below. Blocks new signals only; any existing positions opened by this strategy are unaffected and still managed normally by `trail.py`. `.env` is gitignored, so this pause is local-machine-only — doesn't need a push to take effect, but won't survive a fresh `.env` setup elsewhere. To resume: remove `ema_pullback` from `DISABLED_STRATEGIES` (or delete the line).
 
-Active portfolio: **EPD, ET, HOOD, RLAY** (swing only). `MAX_OPEN_POSITIONS=8` — 4/8, 4 slots open.
+**Portfolio state as of 2026-07-24 ~2:15 PM ET** (superseded the 2026-07-14 snapshot below — kept for history): **BB, CSCO, EPD, ET, HPE, RLAY** (swing only), +$85.00 unrealized (1.70% of $5,000 starting equity). `MAX_OPEN_POSITIONS=8` — 6/8, 2 slots open.
 
 | Symbol | Entry | Notes |
 |---|---|---|
 | ET | $19.47 | Energy Transfer. Dividend momentum. 72 shares. Engine auto-entry 2026-07-06 (CLEAN verdict). Trail ratcheted stop $18.76→$19.83 (+1.1R) 2026-07-13. |
 | EPD | $37.75 | Enterprise Products Partners. Dividend momentum. 36 shares. Engine auto-entry 2026-07-08. |
-| HOOD | $109.52 | Robinhood. Trend momentum. 3 shares. Engine auto-entry 2026-07-14 (CLEAN verdict). |
 | RLAY | $18.86 | Relay Therapeutics. **trend_momentum** (corrected 2026-07-24 — journal DB order row shows `strategy: trend_momentum`; originally misdocumented as ema_pullback since ema_pullback was that day's top-scoring RLAY signal at 3.591, but the engine log shows it was explicitly vetoed by the analyzer and a separate trend_momentum signal executed instead). 20 shares. Engine auto-entry 2026-07-14, only fired because of the universe-sync fix below plus a same-morning manual CLEAN verdict addition. |
+| BB | $10.06 | BlackBerry. rsi2_reversion. 20 shares. Engine auto-entry 2026-07-16. 1:1 bracket off 3x ATR (stop $7.56, target $12.55) — down to −0.60R as of 2026-07-24, stop untouched. |
+| CSCO | $110.48 | Cisco. rsi2_reversion. 4 shares (re-entry — prior CSCO position stopped out 2026-07-07). |
+| HPE | $47.33 | Hewlett Packard Enterprise. trend_momentum. 8 shares. |
+
+**HOOD stopped out 2026-07-24 at 9:37 AM ET** — entry $110.34 fill (bracket recorded $109.52), stop $96.46 filled $96.4567, 3 shares → **−$41.65 (−1.06R)**.
+
+**BTI re-entered 2026-07-21 at $62.22** (18 shares, previously undocumented here), **stopped out 2026-07-23 at $59.45 → −$49.86 (−1.00R)**.
+
+Both were caught stale in the journal on 2026-07-24 — `fetch_open_orders()` still listed them as open (8 symbols) even though both had already closed on Alpaca, because `reconcile.py` isn't on the crontab and hadn't been run manually since they closed. `python -m microbot.reconcile` was run to close them out properly (realized $-91.51 combined); journal now matches Alpaca's live 6 positions exactly. **Takeaway: `reconcile.py` should probably be added to the crontab** (e.g. alongside the hourly `trail.py` runs) so journal drift like this doesn't require a manual catch — not yet done, flagging for next session.
 
 **Universe/verdicts sync bug fixed 2026-07-14 (commit `b00b46a`):** the CCR morning verdicts routine reads `microbot/config.py`'s hardcoded `UNIVERSE` default (its Step 1), but `.env` is gitignored so the routine never saw the real 38-symbol trading universe — only a stale 23-symbol default (with RKLB/AMKR/LION still in it, 18 real symbols missing including RLAY, NOK, BB, HPE, MRVL, USAR, RDW, LUNR, RGTI, IONQ, QBTS, ALAB, QS, BBAI, WDFC, GLD, AEHR, PENG). Fixed by syncing the default to match `.env` exactly — no behavior change locally, but the CCR routine now analyzes the full universe going forward. Same day, manually verdict-checked and added `RLAY: CLEAN` to that morning's `morning_verdicts.json` (commit `0bd9f86`) with minutes to spare before the 9:35 AM cron — engine picked it up and auto-executed.
 
