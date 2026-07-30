@@ -13,16 +13,27 @@ Setup (one time):
 
 This module degrades gracefully: if gspread isn't installed or creds are missing,
 it no-ops with a printed warning instead of crashing the bot.
+
+Every tab push (_push_tab) issues exactly 2 Sheets API write calls total — one
+values.batchUpdate (timestamp + headers + data + guide) and one spreadsheets.batchUpdate
+(unmerge + freeze + merges + all cell formatting + column widths + row height) — instead
+of formatting each header cell / guide section / row band with its own individual call.
+That used to add up to ~20-25 calls per tab and reliably blew through the Sheets API's
+60-writes/minute quota across a 4-tab research push; batching everything that CAN be
+batched into single calls keeps a full run (Watchlist + LiveSignals + Positions +
+DailyTrades) at ~8 calls total, comfortably under quota without needing long sleeps.
 """
 from __future__ import annotations
 
 import time
 from typing import Dict, List
 
+from gspread.utils import a1_range_to_grid_range
+
 from .config import settings
 
 
-def _retry_on_quota(fn, *, retries=1, wait=20):
+def _retry_on_quota(fn, *, retries=2, wait=30):
     """Run fn(); on a Sheets 429 write-quota error, wait and retry before giving up."""
     for attempt in range(retries + 1):
         try:
@@ -178,108 +189,94 @@ _STAMP_BG = {"red": 0.18, "green": 0.38, "blue": 0.62}  # navy blue
 _STAMP_FG = {"red": 1.0,  "green": 1.0,  "blue": 1.0}
 
 
-def _write_timestamp(ws, col_count: int):
-    """Format the timestamp banner at row 1 (content already written by _ensure_ws)."""
-    end_col = _col_letter(col_count)
-    ws.merge_cells(f"A1:{end_col}1")
-    ws.format(f"A1:{end_col}1", {
-        "backgroundColor": _STAMP_BG,
-        "textFormat": {"bold": True, "fontSize": 13, "foregroundColor": _STAMP_FG},
-        "horizontalAlignment": "CENTER", "verticalAlignment": "MIDDLE",
-    })
-
-
-def _add_guide(ws, data_rows: int, guide: list, col_count: int):
-    """Write a column-guide legend below the data table (batched to stay under API quota)."""
-    start = data_rows + 4  # +1 timestamp row, +1 header row, +1 gap, +1
-    end_col = _col_letter(col_count)
-    n = len(guide)
-
-    # Write all values in one call
-    values = [["Column Guide"] + [""] * (col_count - 1)]
-    values += [[label, desc] + [""] * (col_count - 2) for label, desc in guide]
-    ws.update(values=values, range_name=f"A{start}")
-
-    # Merge header row
-    ws.merge_cells(f"A{start}:{end_col}{start}")
-
-    # Format header, labels, and descriptions — 3 calls total
-    ws.format(f"A{start}:{end_col}{start}", {
-        "backgroundColor": _GUIDE_HEADER_BG,
-        "textFormat": {"bold": True, "fontSize": 14, "foregroundColor": _GUIDE_HEADER_FG},
-        "horizontalAlignment": "CENTER", "verticalAlignment": "MIDDLE",
-    })
-    ws.format(f"A{start + 1}:A{start + n}", {
-        "backgroundColor": _GUIDE_LABEL_BG,
-        "textFormat": {"bold": True, "fontSize": 14, "foregroundColor": _GUIDE_LABEL_FG},
-        "horizontalAlignment": "LEFT", "verticalAlignment": "MIDDLE",
-    })
-    ws.format(f"B{start + 1}:{end_col}{start + n}", {
-        "backgroundColor": _GUIDE_LABEL_BG,
-        "textFormat": {"fontSize": 14, "foregroundColor": _GUIDE_LABEL_FG},
-        "horizontalAlignment": "LEFT", "verticalAlignment": "MIDDLE",
-    })
-
-
 def _col_letter(n: int) -> str:
     """Convert 1-based column index to letter (1→A, 2→B …)."""
     return chr(ord("A") + n - 1)
 
 
-def _col_widths(ws, widths: List[int]):
-    try:
-        requests = [
-            {"updateDimensionProperties": {
-                "range": {"sheetId": ws.id, "dimension": "COLUMNS",
-                          "startIndex": i, "endIndex": i + 1},
-                "properties": {"pixelSize": w},
-                "fields": "pixelSize"
-            }}
-            for i, w in enumerate(widths)
-        ]
-        ws.spreadsheet.batch_update({"requests": requests})
-    except Exception:
-        pass
+def _guide_start_row(data_rows: int) -> int:
+    return data_rows + 4  # +1 timestamp row, +1 header row, +1 gap, +1
 
 
-def _row_height(ws, start_row: int, end_row: int, height: int = 28):
-    try:
-        ws.spreadsheet.batch_update({"requests": [
-            {"updateDimensionProperties": {
-                "range": {"sheetId": ws.id, "dimension": "ROWS",
-                          "startIndex": start_row - 1, "endIndex": end_row},
-                "properties": {"pixelSize": height},
-                "fields": "pixelSize"
-            }}
-        ]})
-    except Exception:
-        pass
+def _guide_values(guide: list, col_count: int) -> List[List]:
+    values = [["Column Guide"] + [""] * (col_count - 1)]
+    values += [[label, desc] + [""] * (col_count - 2) for label, desc in guide]
+    return values
 
 
-def _format_header_cells(ws, col_colors: List[dict], col_count: int):
-    """Format each header cell (row 2) with its own color, bold dark text, size 12, border."""
+# ---- raw batchUpdate request builders (build a dict/list only; no API call happens here) ----
+
+def _grid_range(ws, a1_range: str) -> dict:
+    return a1_range_to_grid_range(a1_range, ws.id)
+
+
+def _fmt_req(ws, a1_range: str, style: dict) -> dict:
+    return {
+        "repeatCell": {
+            "range": _grid_range(ws, a1_range),
+            "cell": {"userEnteredFormat": style},
+            "fields": "userEnteredFormat(%s)" % ",".join(style.keys()),
+        }
+    }
+
+
+def _merge_req(ws, a1_range: str) -> dict:
+    return {"mergeCells": {"range": _grid_range(ws, a1_range), "mergeType": "MERGE_ALL"}}
+
+
+def _unmerge_req(ws) -> dict:
+    """Clear all merges so stale guide/timestamp merges don't block data rows on the next write."""
+    return {"unmergeCells": {"range": {
+        "sheetId": ws.id, "startRowIndex": 0, "endRowIndex": 200,
+        "startColumnIndex": 0, "endColumnIndex": 26,
+    }}}
+
+
+def _freeze_req(ws, rows: int = 2) -> dict:
+    return {"updateSheetProperties": {
+        "properties": {"sheetId": ws.id, "gridProperties": {"frozenRowCount": rows}},
+        "fields": "gridProperties.frozenRowCount",
+    }}
+
+
+def _col_width_reqs(ws, widths: List[int]) -> List[dict]:
+    return [
+        {"updateDimensionProperties": {
+            "range": {"sheetId": ws.id, "dimension": "COLUMNS", "startIndex": i, "endIndex": i + 1},
+            "properties": {"pixelSize": w},
+            "fields": "pixelSize",
+        }}
+        for i, w in enumerate(widths)
+    ]
+
+
+def _row_height_req(ws, start_row: int, end_row: int, height: int = 28) -> dict:
+    return {"updateDimensionProperties": {
+        "range": {"sheetId": ws.id, "dimension": "ROWS", "startIndex": start_row - 1, "endIndex": end_row},
+        "properties": {"pixelSize": height},
+        "fields": "pixelSize",
+    }}
+
+
+def _header_cell_reqs(ws, col_colors: List[dict], col_count: int) -> List[dict]:
+    """Per-column header color (row 2) — each column has its own color, so each needs its own request."""
+    reqs = []
     for i, bg in enumerate(col_colors[:col_count]):
         col = _col_letter(i + 1)
-        ws.format(f"{col}2", {
+        reqs.append(_fmt_req(ws, f"{col}2", {
             "backgroundColor": bg,
-            "textFormat": {
-                "bold": True,
-                "fontSize": 12,
-                "foregroundColor": _DARK_TEXT,
-            },
+            "textFormat": {"bold": True, "fontSize": 12, "foregroundColor": _DARK_TEXT},
             "horizontalAlignment": "CENTER",
             "verticalAlignment": "MIDDLE",
-            "borders": {
-                "top":    _BORDER, "bottom": _BORDER,
-                "left":   _BORDER, "right":  _BORDER,
-            },
-        })
+            "borders": {"top": _BORDER, "bottom": _BORDER, "left": _BORDER, "right": _BORDER},
+        }))
+    return reqs
 
 
-def _format_data_rows(ws, row_count: int, col_count: int):
-    """Format data rows: font size 12, alternating bg, borders — batched into 2 API calls."""
+def _data_row_reqs(ws, row_count: int, col_count: int) -> List[dict]:
+    """Alternating row banding for the data rows — one request per row (all bundled into the caller's single batch call)."""
     if row_count == 0:
-        return
+        return []
     end_col = _col_letter(col_count)
     base_style = {
         "textFormat": {"fontSize": 12, "foregroundColor": _DARK_TEXT},
@@ -287,74 +284,35 @@ def _format_data_rows(ws, row_count: int, col_count: int):
         "verticalAlignment": "MIDDLE",
         "borders": {"top": _BORDER, "bottom": _BORDER, "left": _BORDER, "right": _BORDER},
     }
-    even_rows = [f"A{i}:{end_col}{i}" for i in range(3, row_count + 3) if i % 2 == 0]
-    odd_rows  = [f"A{i}:{end_col}{i}" for i in range(3, row_count + 3) if i % 2 != 0]
-    if even_rows:
-        ws.format(even_rows, {**base_style, "backgroundColor": _ROW_ALT})
-    if odd_rows:
-        ws.format(odd_rows,  {**base_style, "backgroundColor": _WHITE})
+    reqs = []
+    for i in range(3, row_count + 3):
+        style = {**base_style, "backgroundColor": _ROW_ALT if i % 2 == 0 else _WHITE}
+        reqs.append(_fmt_req(ws, f"A{i}:{end_col}{i}", style))
+    return reqs
 
 
-def _ensure_ws(sh, title: str, headers: List[str]):
-    from datetime import datetime, timezone
-    now = datetime.now(timezone.utc).astimezone()
-    stamp = now.strftime("%B %d, %Y  %I:%M %p")
-    try:
-        ws = sh.worksheet(title)
-    except Exception:
-        ws = sh.add_worksheet(title=title, rows=200, cols=max(10, len(headers)))
-    ws.clear()
-    # Unmerge all cells so stale guide merges don't block data rows on the next write
-    try:
-        sh.batch_update({"requests": [{"unmergeCells": {
-            "range": {"sheetId": ws.id, "startRowIndex": 0, "endRowIndex": 200,
-                      "startColumnIndex": 0, "endColumnIndex": 26}
-        }}]})
-    except Exception:
-        pass
-    ws.update(values=[[f"microbot  |  Last Updated: {stamp}  |  {_spy_benchmark(settings.lookback_days)}"] + [""] * (len(headers) - 1)], range_name="A1")
-    ws.update(values=[headers], range_name="A2")
-    return ws
-
-
-def _format_watchlist(ws, row_count: int):
-    ws.freeze(rows=2)
-    _write_timestamp(ws, 9)
-    _format_header_cells(ws, _COL_COLORS_WL, 9)
-    _format_data_rows(ws, row_count, 9)
-    _col_widths(ws, [218, 160, 80, 100, 120, 120, 110, 90, 80])
-    _row_height(ws, 1, row_count + 2, 32)
-    _add_guide(ws, row_count, _WL_GUIDE, 9)
-
-
-def _format_signals(ws, row_count: int):
-    ws.freeze(rows=2)
-    _write_timestamp(ws, 8)
-    _format_header_cells(ws, _COL_COLORS_SG, 8)
-    _format_data_rows(ws, row_count, 8)
-    _col_widths(ws, [218, 160, 90, 90, 90, 90, 80, 320])
-    _row_height(ws, 1, max(row_count + 2, 3), 32)
-    _add_guide(ws, row_count, _SG_GUIDE, 8)
-
-
-def _format_positions(ws, row_count: int):
-    ws.freeze(rows=2)
-    _write_timestamp(ws, 9)
-    _format_header_cells(ws, _COL_COLORS_POS, 9)
-    _format_data_rows(ws, row_count, 9)
-    _col_widths(ws, [218, 80, 100, 100, 100, 100, 100, 100, 120])
-    _row_height(ws, 1, max(row_count + 2, 3), 32)
-    _add_guide(ws, row_count, _POS_GUIDE, 9)
-
-
-def _format_daily_trades(ws, row_count: int):
-    ws.freeze(rows=2)
-    _write_timestamp(ws, 8)
-    _format_header_cells(ws, _COL_COLORS_DT, 8)
-    _format_data_rows(ws, row_count, 8)
-    _col_widths(ws, [218, 160, 70, 100, 100, 100, 90, 160])
-    _row_height(ws, 1, max(row_count + 2, 3), 32)
-    _add_guide(ws, row_count, _DT_GUIDE, 8)
+def _guide_reqs(ws, data_rows: int, guide: list, col_count: int) -> List[dict]:
+    start = _guide_start_row(data_rows)
+    end_col = _col_letter(col_count)
+    n = len(guide)
+    return [
+        _merge_req(ws, f"A{start}:{end_col}{start}"),
+        _fmt_req(ws, f"A{start}:{end_col}{start}", {
+            "backgroundColor": _GUIDE_HEADER_BG,
+            "textFormat": {"bold": True, "fontSize": 14, "foregroundColor": _GUIDE_HEADER_FG},
+            "horizontalAlignment": "CENTER", "verticalAlignment": "MIDDLE",
+        }),
+        _fmt_req(ws, f"A{start + 1}:A{start + n}", {
+            "backgroundColor": _GUIDE_LABEL_BG,
+            "textFormat": {"bold": True, "fontSize": 14, "foregroundColor": _GUIDE_LABEL_FG},
+            "horizontalAlignment": "LEFT", "verticalAlignment": "MIDDLE",
+        }),
+        _fmt_req(ws, f"B{start + 1}:{end_col}{start + n}", {
+            "backgroundColor": _GUIDE_LABEL_BG,
+            "textFormat": {"fontSize": 14, "foregroundColor": _GUIDE_LABEL_FG},
+            "horizontalAlignment": "LEFT", "verticalAlignment": "MIDDLE",
+        }),
+    ]
 
 
 def _native(v):
@@ -363,6 +321,53 @@ def _native(v):
         return v.item()
     except AttributeError:
         return v
+
+
+def _push_tab(sh, title: str, headers: List[str], rows: List[list],
+              col_colors: List[dict], col_widths: List[int], guide: list) -> int:
+    """Write one tab's timestamp/headers/data/guide + all formatting in exactly 2 API calls."""
+    from datetime import datetime, timezone
+
+    col_count = len(headers)
+    try:
+        ws = sh.worksheet(title)
+    except Exception:
+        ws = sh.add_worksheet(title=title, rows=200, cols=max(10, col_count))
+    ws.clear()
+
+    now = datetime.now(timezone.utc).astimezone()
+    stamp = now.strftime("%B %d, %Y  %I:%M %p")
+    stamp_row = [f"microbot  |  Last Updated: {stamp}  |  {_spy_benchmark(settings.lookback_days)}"] + [""] * (col_count - 1)
+
+    row_count = len(rows)
+    guide_start = _guide_start_row(row_count)
+
+    value_ranges = [
+        {"range": "A1", "values": [stamp_row]},
+        {"range": "A2", "values": [headers]},
+    ]
+    if rows:
+        value_ranges.append({"range": "A3", "values": rows})
+    value_ranges.append({"range": f"A{guide_start}", "values": _guide_values(guide, col_count)})
+
+    _retry_on_quota(lambda: ws.batch_update(value_ranges))
+
+    requests = [_unmerge_req(ws), _freeze_req(ws, 2)]
+    requests.append(_merge_req(ws, f"A1:{_col_letter(col_count)}1"))
+    requests.append(_fmt_req(ws, f"A1:{_col_letter(col_count)}1", {
+        "backgroundColor": _STAMP_BG,
+        "textFormat": {"bold": True, "fontSize": 13, "foregroundColor": _STAMP_FG},
+        "horizontalAlignment": "CENTER", "verticalAlignment": "MIDDLE",
+    }))
+    requests += _header_cell_reqs(ws, col_colors, col_count)
+    requests += _data_row_reqs(ws, row_count, col_count)
+    requests += _col_width_reqs(ws, col_widths)
+    requests.append(_row_height_req(ws, 1, max(row_count + 2, 3), 32))
+    requests += _guide_reqs(ws, row_count, guide, col_count)
+
+    _retry_on_quota(lambda: ws.spreadsheet.batch_update({"requests": requests}))
+
+    return row_count
 
 
 def push_research(result: Dict) -> bool:
@@ -378,7 +383,6 @@ def push_research(result: Dict) -> bool:
     # Watchlist / rankings tab
     rk_headers = ["Symbol", "Strategy", "Trades", "Win Rate",
                   "Expectancy R", "Profit Factor", "Max DD (R)", "Score", "Dividend"]
-    ws = _ensure_ws(sh, "Watchlist", rk_headers)
     rk_keys = ["symbol", "strategy", "trades", "win_rate",
                "expectancy_r", "profit_factor", "max_dd_R", "score", "dividend"]
     best: dict = {}
@@ -399,21 +403,18 @@ def push_research(result: Dict) -> bool:
     rows = [[("YES" if r.get(k) else ("" if k == "dividend" else _native(r.get(k)))) if k == "dividend"
              else _native(r.get(k)) for k in rk_keys]
             for r in sorted(best.values(), key=lambda r: r.get("symbol", ""))]
-    if rows:
-        ws.update(values=rows, range_name="A3")
-    _format_watchlist(ws, len(rows))
+    n_rk = _push_tab(sh, "Watchlist", rk_headers, rows, _COL_COLORS_WL,
+                      [218, 160, 80, 100, 120, 120, 110, 90, 80], _WL_GUIDE)
 
     # Live signals tab
     sg_headers = ["Symbol", "Strategy", "Entry", "Stop", "Target", "Score", "Dividend", "Reason"]
-    ws2 = _ensure_ws(sh, "LiveSignals", sg_headers)
     sg_keys = ["symbol", "strategy", "entry", "stop", "target", "score", "dividend", "reason"]
     rows2 = [[("YES" if s.get(k) else ("" if k == "dividend" else _native(s.get(k)))) if k == "dividend"
               else _native(s.get(k)) for k in sg_keys] for s in result["live_signals"]]
-    if rows2:
-        ws2.update(values=rows2, range_name="A3")
-    _format_signals(ws2, len(rows2))
+    n_sg = _push_tab(sh, "LiveSignals", sg_headers, rows2, _COL_COLORS_SG,
+                      [218, 160, 90, 90, 90, 90, 80, 320], _SG_GUIDE)
 
-    print(f"  (gsheets) pushed {len(rows)} rankings, {len(rows2)} live signals.")
+    print(f"  (gsheets) pushed {n_rk} rankings, {n_sg} live signals.")
     return True
 
 
@@ -474,7 +475,6 @@ def push_positions() -> bool:
 
         sh = _client().open_by_key(settings.gsheet_id)
         pos_headers = ["Symbol", "Shares", "Entry", "Current", "P&L $", "P&L %", "Stop", "Target", "Health"]
-        ws = _retry_on_quota(lambda: _ensure_ws(sh, "Positions", pos_headers))
 
         rows = []
         for p in sorted(positions, key=lambda x: x.symbol):
@@ -513,10 +513,9 @@ def push_positions() -> bool:
                 health,
             ])
 
-        if rows:
-            _retry_on_quota(lambda: ws.update(values=rows, range_name="A3"))
-        _retry_on_quota(lambda: _format_positions(ws, len(rows)))
-        print(f"  (gsheets) pushed {len(rows)} positions.")
+        n = _push_tab(sh, "Positions", pos_headers, rows, _COL_COLORS_POS,
+                      [218, 80, 100, 100, 100, 100, 100, 100, 120], _POS_GUIDE)
+        print(f"  (gsheets) pushed {n} positions.")
         return True
     except Exception as e:
         print(f"  (gsheets) positions skipped: {e}")
@@ -537,7 +536,6 @@ def push_daily_trades() -> bool:
 
         sh = _client().open_by_key(settings.gsheet_id)
         headers = ["Symbol", "Strategy", "Qty", "Entry", "Stop", "Target", "$ Risk", "Time"]
-        ws = _retry_on_quota(lambda: _ensure_ws(sh, "DailyTrades", headers))
 
         rows = []
         for o in sorted(todays, key=lambda x: x.get("ts") or ""):
@@ -559,10 +557,9 @@ def push_daily_trades() -> bool:
                 time_str,
             ])
 
-        if rows:
-            _retry_on_quota(lambda: ws.update(values=rows, range_name="A3"))
-        _retry_on_quota(lambda: _format_daily_trades(ws, len(rows)))
-        print(f"  (gsheets) pushed {len(rows)} daily trades.")
+        n = _push_tab(sh, "DailyTrades", headers, rows, _COL_COLORS_DT,
+                      [218, 160, 70, 100, 100, 100, 90, 160], _DT_GUIDE)
+        print(f"  (gsheets) pushed {n} daily trades.")
         return True
     except Exception as e:
         print(f"  (gsheets) daily trades skipped: {e}")
