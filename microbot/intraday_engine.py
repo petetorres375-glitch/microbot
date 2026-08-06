@@ -60,6 +60,7 @@ class ORBState:
     orb_high: float = 0.0
     orb_low: float = 0.0
     orb_established: bool = False
+    orb_invalid: bool = False  # zero-width opening range (single 9:30 print) — no real support/resistance
 
     in_trade: bool = False
     qty_total: int = 0
@@ -179,7 +180,7 @@ class IntradayEngine:
 
     def _establish_orb(self):
         pending = [sym for sym, s in self.states.items()
-                   if not s.orb_established and not s.closed]
+                   if not s.orb_established and not s.orb_invalid and not s.closed]
         if not pending:
             return
 
@@ -229,6 +230,16 @@ class IntradayEngine:
 
     def _set_orb(self, sym: str, high: float, low: float):
         s = self.states[sym]
+        if high <= low:
+            # A zero-width 9:30 bar means only one trade printed in the opening
+            # minute — the "range" isn't real support/resistance, just wherever
+            # that single print landed. Using it as a stop makes the position
+            # near-certain to get tagged by ordinary noise (PRCT 2026-08-06:
+            # high=low=18.20, stopped out -1.1R within minutes of entry).
+            s.orb_invalid = True
+            print(f"  ORB {sym}: high={high:.2f}  low={low:.2f}  "
+                  f"range=0.00 — skipping (zero-width opening bar, no real stop level)")
+            return
         s.orb_high = high
         s.orb_low = low
         s.orb_established = True
