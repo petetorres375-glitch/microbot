@@ -156,6 +156,14 @@ The weekly remote optimizer does walk-forward grid search and proposes better st
 4. User: `python -m microbot.approvals --params` to approve/reject
 5. Engine picks up approved params on next run
 
+## Signal notification accuracy fix (2026-08-06, commit `c739fd8`)
+
+`notify_summary()`'s "N Signals Today!" pop-up/log bullet list was built from `result["rankings"][:3]` (top backtest-score performers) even though the header count came from `result["live_signals"]`. `engine.py`'s separate `top candidates:` print line uses the same rankings list — it shows the top 5 symbols by historical backtest score, **regardless of whether they have an active signal today**. A strong all-time performer (e.g. NOK, scores 2.559/2.226) shows up in both of these every day it backtests well, whether or not it fired.
+
+Surfaced 2026-08-06: NOK appeared in that morning's "4 Signals Today!" bullet list, looked like a dropped trade, but a live `research()` re-run confirmed NOK had **zero live signals** that morning — it never entered `engine.py`'s signal-execution loop (`run_once()` lines ~159-203) at all, so nothing was skipped or lost. Root cause confirmed by process of elimination: every other branch in that loop (sector cap, analyzer veto, verdict gate, sizing gate, order failure) prints a message on skip; the *only* silent branch is `if s["symbol"] in held: continue`. Since NOK produced zero output of any kind, it was never a real candidate — just backtest-ranking decoration.
+
+Fixed: `notify_summary()` now takes separate `live_signals` and `rankings` params — the "N Signals Today" bullets use `live_signals[:3]` (what actually fired), and `rankings[:3]` is only used for the "no signals today, top picks were..." fallback message. `engine.py`'s `top candidates:` print was relabeled `top backtest-ranked (not necessarily live today):` so it can't be misread as live signals again. The real signals table in the journal DB (`journal.log_signal`) also isn't reliable for reconstructing which symbols fired on a given past day — it's only called *after* the held/sector/analyzer/verdict gates, so days where every signal lands on an already-held or vetoed symbol log nothing (this table hasn't gained a new row since mid-June for exactly that reason) — not fixed as part of this change, just noted.
+
 ## Google Sheets dashboard
 
 `run_research.py` pushes three tabs to the sheet at `GSHEET_ID`:
