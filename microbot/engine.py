@@ -110,7 +110,7 @@ def run_once(research_only: bool = False, push_sheets: bool = False):
 
     print("\nResearching universe (backtest + rank)...")
     result = research(default_strats=default_strats, div_strats=div_strats)
-    print(f"  top candidates: " + ", ".join(
+    print(f"  top backtest-ranked (not necessarily live today): " + ", ".join(
         f"{r['symbol']}/{r['strategy']}({r['score']})"
         for r in result["rankings"][:5] if r["score"] > 0) or "  (none scored > 0)")
     print(f"  live signals today: {len(result['live_signals'])}")
@@ -204,7 +204,8 @@ def run_once(research_only: bool = False, push_sheets: bool = False):
 
     notify.notify_summary(
         signals=len(result["live_signals"]),
-        top_candidates=result["rankings"][:3],
+        live_signals=result["live_signals"],
+        rankings=result["rankings"],
         equity=acct["equity"],
     )
 

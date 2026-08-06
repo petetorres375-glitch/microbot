@@ -38,13 +38,20 @@ def notify_proposals(proposals: list, msg: str = ""):
     _desktop(title, body, urgency="normal", icon="dialog-information")
 
 
-def notify_summary(signals: int, top_candidates: list, equity: float):
-    """Called at end of every engine run with a daily summary pop-up."""
+def notify_summary(signals: int, live_signals: list, rankings: list, equity: float):
+    """Called at end of every engine run with a daily summary pop-up.
+
+    `live_signals` and `rankings` are different lists: live_signals are the
+    symbols that actually fired a signal today, rankings are the top
+    backtest-score performers regardless of whether they signaled today.
+    Mixing them up makes the pop-up show a symbol as "signaling" when it
+    only ranks well historically (see engine.py NOK/2026-08-06 incident).
+    """
     if signals > 0:
         title = f"📈 microbot — {signals} Signal{'s' if signals > 1 else ''} Today!"
         body = "\n".join(
             f"• {s['symbol']} / {s['strategy']}  score {s.get('score', '')}"
-            for s in top_candidates[:3]
+            for s in live_signals[:3]
         )
         urgency = "normal"
         icon = "dialog-information"
@@ -52,7 +59,7 @@ def notify_summary(signals: int, top_candidates: list, equity: float):
         title = "microbot — Daily Scan Complete"
         tops = ", ".join(
             f"{r['symbol']}/{r['strategy']}"
-            for r in top_candidates[:3]
+            for r in rankings[:3]
         )
         body = f"No signals today.\nTop picks: {tops}\nEquity: ${equity:,.2f}"
         urgency = "low"
