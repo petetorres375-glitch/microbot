@@ -1,41 +1,24 @@
 {
-  "run_ts": "2026-08-03T10:37:33.847534+00:00",
+  "run_ts": "2026-08-10T10:36:38.654847+00:00",
   "proposals": [
-    {
-      "strategy": "breakout",
-      "proposed_params": {
-        "channel": 15,
-        "vol_mult": 1.2,
-        "stop_mult": 2.0
-      },
-      "current_params": {
-        "channel": 25,
-        "vol_mult": 1.2,
-        "stop_mult": 2.0
-      },
-      "is_score": 46.129,
-      "oos_score": 26.1147,
-      "current_oos_score": 21.9522,
-      "improvement_pct": 18.96
-    },
     {
       "strategy": "dividend_momentum",
       "proposed_params": {
-        "fast": 40,
-        "slow": 100,
-        "adx_min": 10,
-        "stop_mult": 2.0
-      },
-      "current_params": {
         "fast": 40,
         "slow": 80,
         "adx_min": 10,
         "stop_mult": 2.0
       },
-      "is_score": 63.0052,
-      "oos_score": 3.8547,
-      "current_oos_score": 3.116,
-      "improvement_pct": 23.71
+      "current_params": {
+        "fast": 40,
+        "slow": 100,
+        "adx_min": 10,
+        "stop_mult": 2.0
+      },
+      "is_score": 59.8449,
+      "oos_score": 5.487,
+      "current_oos_score": 2.2183,
+      "improvement_pct": 147.35
     }
   ]
 }
