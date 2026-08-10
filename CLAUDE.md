@@ -345,7 +345,25 @@ Per user instruction (2026-07-01): watch for SPCX to reclaim the prior entry pri
 
 **`ema_pullback` paused 2026-07-15** via `DISABLED_STRATEGIES=ema_pullback` in `.env` (mechanism: `settings.disabled_strategies`, checked in `build_default_strategies()`/`build_strategies_from_params()` in `microbot/strategies.py`, commit `eaa10bf`). Reason: worst-performing strategy in the journal (14% win rate, −0.80R expectancy, −$277.85 over 7 trades) and the optimizer structurally can't tune it — see "Optimizer params updated 2026-07-13" correction below. Blocks new signals only; any existing positions opened by this strategy are unaffected and still managed normally by `trail.py`. `.env` is gitignored, so this pause is local-machine-only — doesn't need a push to take effect, but won't survive a fresh `.env` setup elsewhere. To resume: remove `ema_pullback` from `DISABLED_STRATEGIES` (or delete the line).
 
-**Portfolio state as of 2026-07-24 ~2:15 PM ET** (superseded the 2026-07-14 snapshot below — kept for history): **BB, CSCO, EPD, ET, HPE, RLAY** (swing only), +$85.00 unrealized (1.70% of $5,000 starting equity). `MAX_OPEN_POSITIONS=8` — 6/8, 2 slots open.
+**Portfolio state as of 2026-08-10 ~3:00 PM ET** (supersedes the 2026-07-24 snapshot below — kept for history): 5 of 8 `MAX_OPEN_POSITIONS` slots — **BB, EPD, ET, F, RLAY**, +$10.01 unrealized (0.20% of $5,000 starting equity).
+
+| Symbol | Strategy | Shares | Entry | Live Stop | Target |
+|---|---|---|---|---|---|
+| BB | rsi2_reversion | 20 | $10.06 | $7.56 | $12.55 |
+| EPD | dividend_momentum | 34 | $37.83 | $36.38 | $40.72 |
+| ET | dividend_momentum | 76 | $20.23 | $19.58 | $21.54 |
+| F | rsi2_reversion | 31 | $14.24 | $12.65 | $15.82 |
+| RLAY | trend_momentum | 20 | $18.86 | $16.47 | $23.64 |
+
+All 5 live stops verified directly against Alpaca (HELD legs via parent-order `.legs`, not `get_orders(status=OPEN)` — see the HELD-legs fix note above). None have reached +1R yet, so none are ratcheted above the original journal stop.
+
+CSCO and HPE (both held as of the 2026-08-04 snapshot) have since closed: **CSCO** target hit 2026-08-05 at $122.5375 (4 shares, entry $110.32, +$48.87, +1.04R); **HPE** stopped out 2026-08-06 at $49.70 (8 shares, entry $47.33, +$18.96, +0.42R — a winning stop, not a loss). **F** resolves the "new position not previously tracked in memory" flag from 2026-08-04 — confirmed in the journal as a real rsi2_reversion entry (entry $14.24, stop $12.65, target $15.82).
+
+**`dividend_momentum`'s optimizer `slow` parameter has flip-flopped twice in 3 weeks:** approved `slow=80` on 2026-07-20 (+300.9% OOS), flipped to `slow=100` sometime since (source run not reviewed live in a session), and the 2026-08-10 weekly run proposed reverting to `slow=80` again (+147.3% OOS, score 5.487 vs current 2.218) — approved same day (commit `51bfe1c`). Two reversals on the same parameter in three weeks may mean the OOS window is short enough to be chasing noise on this strategy specifically; worth checking whether it flips a third time next Monday before trusting these swings as a real edge.
+
+**2026-08-10 engine run:** 6 live signals fired (T, RDW, GLD + 3 more, all `trend_momentum`), all vetoed by the analyzer — no new swing trades placed, position count held at 5/8. ORB had 2 trades: MNDY (+$8.75, ~breakeven — trailed stop caught it before the target) and SLN (−$48.64, −0.93R stop-out).
+
+**Portfolio state as of 2026-07-24 ~2:15 PM ET** (superseded by the 2026-08-10 snapshot above — kept for history): **BB, CSCO, EPD, ET, HPE, RLAY** (swing only), +$85.00 unrealized (1.70% of $5,000 starting equity). `MAX_OPEN_POSITIONS=8` — 6/8, 2 slots open.
 
 | Symbol | Entry | Notes |
 |---|---|---|
