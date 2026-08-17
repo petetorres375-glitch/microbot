@@ -72,10 +72,12 @@ class Settings:
     })
 
     # --- Post-split universe: high-momentum names that are now affordable
-    # after large splits. NVDA (10:1), TSLA, AMZN (20:1), GOOG (20:1), SHOP (10:1).
+    # after large splits. NVDA (10:1), TSLA, AMZN (20:1), SHOP (10:1).
+    # GOOG removed 2026-08-17: 0-for-3 real trades, -$335.74, every loss predating
+    # the 2026-06-21 weekly trend filter and 2026-07-13 trend_momentum param retune.
     split_universe: List[str] = field(default_factory=lambda: os.getenv(
         "SPLIT_UNIVERSE",
-        "NVDA,TSLA,AMZN,GOOG,SHOP"
+        "NVDA,TSLA,AMZN,SHOP"
     ).split(","))
 
     # Set to false to exclude post-split stocks from the scan.
