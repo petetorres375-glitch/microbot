@@ -43,3 +43,37 @@ def test_invalid_orb_excluded_from_pending():
                if not s.orb_established and not s.orb_invalid and not s.closed]
 
     assert pending == ["PAVS"]
+
+
+def test_finalize_uses_initial_risk_not_trailed_stop():
+    """_finalize's R math must use the ORIGINAL risk (initial_risk), not the
+    mutated s.stop_price — which _manage() ratchets up to breakeven on
+    scale-out and further on every trail step. Using the live stop_price
+    made entry - stop_price go negative for any winner whose trail moved
+    past entry, silently logging r_multiple=0.0 despite a real profit
+    (found 2026-08-28: 22 of 58 historical ORB trades affected, e.g. AEHR
+    08-04 +$172.22 logged as 0.0R).
+    """
+    e = _engine()
+    e._record_pnl = lambda pnl: None
+    logged = {}
+    e._log_closed = lambda sym, exit_price, reason, pnl, r, half_price=None: logged.update(
+        {"pnl": pnl, "r": r}
+    )
+
+    s = ORBState(symbol="UMAC")
+    s.qty_total = 49
+    s.qty_remaining = 20
+    s.entry_price = 21.22
+    s.initial_risk = 21.22 - 20.21  # original stop, never re-derived from stop_price
+    s.stop_price = 21.74            # trailed past entry — would flip the sign if used
+    s.half_exited = True
+    s.target_price = 23.24
+    # scale-out already realized 29 shares' worth of gain; remainder stops at 21.74
+    s.realized_pnl = 29 * (23.24 - 21.22) + 20 * (21.74 - 21.22)
+    e.states["UMAC"] = s
+
+    e._finalize("UMAC", 21.74, "stop")
+
+    assert logged["pnl"] > 0
+    assert logged["r"] > 0, "trailed winner must not be logged as 0.0R"

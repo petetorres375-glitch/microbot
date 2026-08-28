@@ -486,7 +486,7 @@ class IntradayEngine:
         s.closed = True
         s.in_trade = False
         total_pnl = round(s.realized_pnl, 2)
-        risk = s.qty_total * (s.entry_price - s.stop_price)
+        risk = s.qty_total * s.initial_risk
         r = round(total_pnl / risk, 2) if risk > 0 else 0.0
         print(f"  CLOSED {sym}: {reason}  exit={exit_price:.2f}  "
               f"pnl=${total_pnl:.2f}  {r:+.1f}R")
