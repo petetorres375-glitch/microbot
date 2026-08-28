@@ -9,8 +9,10 @@ Verified against alpaca-py 0.43.4.
 """
 from __future__ import annotations
 
+from datetime import date
 from typing import List
 
+from alpaca.common.exceptions import APIError
 from alpaca.trading.client import TradingClient
 from alpaca.trading.requests import (
     MarketOrderRequest, LimitOrderRequest,
@@ -20,6 +22,31 @@ from alpaca.trading.enums import OrderSide, OrderClass, TimeInForce, QueryOrderS
 
 from .config import settings
 from .risk import SizedTrade
+
+
+def describe_order_error(e: Exception) -> str:
+    """Turn an order-submission failure into an actionable message.
+
+    POST /v2/orders documents exactly two error response bodies, and neither
+    means what its generic HTTP name suggests: 403 is insufficient buying
+    power or shares, not an auth problem; 422 is an unrecognized/invalid
+    parameter, which is also how a non-tradable or unknown symbol surfaces
+    here (not as a 404). 429 means back off and retry later; 401 means stop,
+    don't retry with the same credentials.
+    """
+    if not isinstance(e, APIError):
+        return str(e)
+    try:
+        detail = e.message
+    except Exception:
+        detail = str(e)
+    hint = {
+        403: "insufficient buying power or shares",
+        422: "invalid order parameters or untradable symbol",
+        429: "rate limited by Alpaca — back off and retry later",
+        401: "credential problem — do not retry with the same credentials",
+    }.get(e.status_code)
+    return f"{hint} ({detail})" if hint else detail
 
 
 class Broker:
@@ -66,6 +93,11 @@ class Broker:
         target and a stop-loss leg at the protective stop. Whole shares only.
         """
         s = trade.signal
+        # Deterministic per (symbol, strategy, day) so a retry after a timed-out
+        # submission (Alpaca's paper API congests 9:30-9:50 AM ET, see CLAUDE.md)
+        # can't silently double-buy — Alpaca rejects a client_order_id it has
+        # already seen instead of accepting a duplicate bracket.
+        client_order_id = f"{s.strategy}-{s.symbol}-{date.today().isoformat()}"
         order = MarketOrderRequest(
             symbol=s.symbol,
             qty=trade.qty,
@@ -74,6 +106,7 @@ class Broker:
             order_class=OrderClass.BRACKET,
             take_profit=TakeProfitRequest(limit_price=round(s.target, 2)),
             stop_loss=StopLossRequest(stop_price=round(s.stop, 2)),
+            client_order_id=client_order_id,
         )
         return self.client.submit_order(order)
 

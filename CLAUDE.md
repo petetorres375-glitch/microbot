@@ -209,6 +209,8 @@ A bracket order submits three legs in one request: entry, stop-loss, and take-pr
 
 Bracket orders use `TimeInForce.GTC` (not DAY) so stop and take-profit legs survive overnight. A prior bug used DAY, which canceled all legs at market close and left positions unprotected — fixed 2026-06-03 (commit 8506ef4).
 
+**Order idempotency + error diagnostics added 2026-08-28 (commit pending):** surfaced by comparing microbot against Alpaca's open-source Paper Trading Skill (an interactive, confirm-every-order workflow that doesn't fit this project's fully-automated design — not adopted — but its documented error-code semantics exposed two real gaps). `Broker.submit_bracket()` now sets a deterministic `client_order_id` (`f"{strategy}-{symbol}-{date.today().isoformat()}"`) so a retry after a timed-out submission — Alpaca's paper API reliably congests 9:30-9:50 AM ET, see the note further down — can't silently double-buy; Alpaca rejects a `client_order_id` it's already seen instead of accepting a duplicate. This also gives the swing engine (which, unlike `run_intraday.py`, has no lockfile against simultaneous instances) a second line of defense against the same double-order failure mode WAVE hit on 2026-06-25. Separately, `engine.py`'s order-submission failure handler used to print a bare `except Exception as e: ... {e}`, losing the fact that `POST /v2/orders` only ever returns two meaningful error bodies whose HTTP names are misleading: `403` means insufficient buying power/shares (not auth), `422` means bad parameters or an untradable symbol (not "not found"). New `broker.describe_order_error()` translates these (plus `429`/`401`) into an actionable message; `tests/test_broker.py` covers both. Full suite (56 tests) passes.
+
 ## Trailing stops (both layers)
 
 Added 2026-06-12 after UBXG rode a +1.7R open gain back toward its original stop:
@@ -457,9 +459,11 @@ Co-Authored-By: Pedro Torres <pete.torres.375@gmail.com>
 ALPACA_API_KEY=...
 ALPACA_API_SECRET=...
 LIVE_TRADING=false
-STARTING_EQUITY=5000
+STARTING_EQUITY=5000   # temporarily 50000 as of 2026-08-28, see note below
 MAX_OPEN_POSITIONS=8
 INCLUDE_DIVIDEND_STOCKS=true
 INCLUDE_SPLIT_STOCKS=true
 GSHEET_ID=...
 ```
+
+**`STARTING_EQUITY` set to 50000 on 2026-08-28** (user request, deliberately kept — not a one-off test that got left behind). This does **not** change the real live-funding plan: user will fund the live account with $5,000 + $1,000/month once trading goes live (see the retirement roadmap memory), and will revert `STARTING_EQUITY` back to `5000` at that point. Until then, paper sizes positions as if equity were $50k (~10x the share counts/dollar risk vs. the $5k baseline) — this only affects paper position sizing, not the actual funding plan. Don't "fix" this back to 5000 without asking; it's intentional.

@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import argparse
 
-from .broker import Broker
+from .broker import Broker, describe_order_error
 from .config import settings
 from . import journal
 from . import feedback
@@ -200,7 +200,7 @@ def run_once(research_only: bool = False, push_sheets: bool = False):
             print(f"  AUTO(CLEAN) {sized.qty}x {s['symbol']} @~{s['entry']} "
                   f"stop {s['stop']} target {s['target']} (risk ${sized.dollar_risk:.2f})")
         except Exception as e:
-            print(f"  order failed for {s['symbol']}: {e}")
+            print(f"  order failed for {s['symbol']}: {describe_order_error(e)}")
 
     notify.notify_summary(
         signals=len(result["live_signals"]),
