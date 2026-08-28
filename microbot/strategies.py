@@ -252,11 +252,12 @@ class Breakout(Strategy):
             upper_now = upper.iloc[-1]
             a = ind.atr(df, self.atr_period).iloc[-1]
             avg_vol = df["volume"].rolling(self.vol_period).mean().iloc[-1]
-        vol_ok = df["volume"].iloc[-1] >= self.vol_mult * avg_vol
+        vol_today = ind.pace_adjusted_volume(df)
+        vol_ok = vol_today >= self.vol_mult * avg_vol
 
         broke_out = close.iloc[-1] > upper_now
         if broke_out and vol_ok:
-            why = f"Close>{self.channel}d-high on {df['volume'].iloc[-1]/avg_vol:.1f}x vol"
+            why = f"Close>{self.channel}d-high on {vol_today/avg_vol:.1f}x vol"
             return _bracket(symbol, self.name, close.iloc[-1], a,
                             self.stop_mult, self.rr, why)
         return None
@@ -445,11 +446,12 @@ class Breakout52w(Strategy):
             prior_high = df["high"].iloc[-(self.lookback + 1):-1].max()
             a = ind.atr(df, self.atr_period).iloc[-1]
             avg_vol = df["volume"].rolling(self.vol_period).mean().iloc[-1]
-        vol_ok = df["volume"].iloc[-1] >= self.vol_mult * avg_vol
+        vol_today = ind.pace_adjusted_volume(df)
+        vol_ok = vol_today >= self.vol_mult * avg_vol
 
         if close.iloc[-1] > prior_high and vol_ok:
             why = (f"New {self.lookback}d-high on "
-                   f"{df['volume'].iloc[-1] / avg_vol:.1f}x vol")
+                   f"{vol_today / avg_vol:.1f}x vol")
             return _bracket(symbol, self.name, close.iloc[-1], a,
                             self.stop_mult, self.rr, why)
         return None

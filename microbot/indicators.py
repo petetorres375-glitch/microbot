@@ -9,10 +9,43 @@ Learning note: indicators are just rolling math over price. Nothing magic.
 """
 from __future__ import annotations
 
+import datetime
 import warnings
+from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
+
+
+def pace_adjusted_volume(df: pd.DataFrame, now: datetime.datetime | None = None) -> float:
+    """The latest bar's volume, projected to a full-session equivalent if that
+    bar is TODAY's still-in-progress session — otherwise returned as-is.
+
+    Breakout/Breakout52w compare one day's volume against a many-day average
+    to confirm a breakout. The swing engine runs at 9:34 AM ET, ~4 minutes
+    into a 390-minute session — Alpaca's "1Day" bar for the current trading
+    day updates live and only reflects trades since the open up to the fetch
+    time, so comparing that partial total against a full-day average fails
+    almost every time the engine runs, regardless of what the stock actually
+    does by end of day (confirmed 2026-08-28: breakout had gone 6+ weeks with
+    zero live signals despite the strategy firing repeatedly in backtests
+    over that same window). Project it the same way intraday_scanner.py
+    already does for ORB relative-volume (per-minute rate vs. historical
+    average) instead of comparing ~4 minutes of volume to a 20-day average.
+
+    A completed historical bar (any backtest day, or a live day evaluated
+    after the close) is returned unchanged — only a bar dated today AND
+    fetched during the regular session gets projected.
+    """
+    vol = df["volume"].iloc[-1]
+    now = now or datetime.datetime.now(ZoneInfo("America/New_York"))
+    if df.index[-1].date() != now.date():
+        return vol
+    market_open = now.replace(hour=9, minute=30, second=0, microsecond=0)
+    elapsed_min = (now - market_open).total_seconds() / 60
+    if elapsed_min <= 0 or elapsed_min >= 390:
+        return vol
+    return vol * (390 / elapsed_min)
 
 
 def sma(close: pd.Series, period: int) -> pd.Series:
