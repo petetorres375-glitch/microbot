@@ -2,8 +2,14 @@
 9:30 opening bar (high == low, a single print) was used as a real stop level and
 got tagged almost immediately for -1.1R. _set_orb should reject that range
 instead of treating it as tradeable support/resistance.
+
+Extended 2026-09-01 (commit pending): STDN entered on a range=0.08 (0.49% of
+price) opening bar — not zero-width, but tight enough that ordinary
+stop-market slippage ate 79% of the intended risk on top of the full 1R,
+for -1.79R / -$892.75, the worst ORB loss on record. _set_orb now rejects any
+range below 0.5% of price (MIN_ORB_RANGE_PCT), not just literally zero.
 """
-from microbot.intraday_engine import IntradayEngine, ORBState
+from microbot.intraday_engine import IntradayEngine, MIN_ORB_RANGE_PCT, ORBState
 
 
 def _engine():
@@ -20,6 +26,29 @@ def test_set_orb_rejects_zero_width_range():
     s = e.states["PRCT"]
     assert s.orb_invalid is True
     assert s.orb_established is False
+
+
+def test_set_orb_rejects_too_tight_range():
+    e = _engine()
+    e.states["STDN"] = ORBState(symbol="STDN")
+    e._set_orb("STDN", high=16.24, low=16.16)  # range=0.08, 0.49% of price
+
+    s = e.states["STDN"]
+    assert s.orb_invalid is True
+    assert s.orb_established is False
+
+
+def test_set_orb_accepts_range_at_threshold():
+    e = _engine()
+    e.states["AEHR"] = ORBState(symbol="AEHR")
+    # range=0.51% of price — just above MIN_ORB_RANGE_PCT, must still trade
+    high = 97.49
+    low = high - high * (MIN_ORB_RANGE_PCT + 0.0005)
+    e._set_orb("AEHR", high=high, low=low)
+
+    s = e.states["AEHR"]
+    assert s.orb_invalid is False
+    assert s.orb_established is True
 
 
 def test_set_orb_accepts_normal_range():

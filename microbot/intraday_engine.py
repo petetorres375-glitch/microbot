@@ -52,6 +52,9 @@ ORB_WINDOW_MINUTES = 5      # length of opening range
 ENTRY_CUTOFF = (10, 0)      # no new entries after 10:00 AM ET
 EOD_CLOSE = (15, 55)        # hard close at 3:55 PM ET
 CANDIDATES_FILE = "intraday_candidates.json"
+# A range below this fraction of price isn't real support/resistance, just
+# ordinary tick noise — see MIN_ORB_RANGE_PCT rationale on _set_orb.
+MIN_ORB_RANGE_PCT = 0.005
 
 
 @dataclass
@@ -230,15 +233,26 @@ class IntradayEngine:
 
     def _set_orb(self, sym: str, high: float, low: float):
         s = self.states[sym]
-        if high <= low:
-            # A zero-width 9:30 bar means only one trade printed in the opening
-            # minute — the "range" isn't real support/resistance, just wherever
-            # that single print landed. Using it as a stop makes the position
-            # near-certain to get tagged by ordinary noise (PRCT 2026-08-06:
-            # high=low=18.20, stopped out -1.1R within minutes of entry).
+        range_pct = (high - low) / high if high else 0.0
+        if high <= low or range_pct < MIN_ORB_RANGE_PCT:
+            # A zero-width (or near-zero) 9:30 bar isn't real support/resistance,
+            # just wherever the opening print(s) landed. Using it as a stop makes
+            # the position near-certain to get tagged by ordinary noise — and
+            # because sizing targets a fixed dollar risk, a tiny risk-per-share
+            # also balloons share count, so the *same* per-share slippage from an
+            # ordinary stop-market fill eats a much bigger fraction of the
+            # intended R. Two real incidents: PRCT 2026-08-06 (high=low=18.20,
+            # zero-width, -1.1R) and STDN 2026-09-01 (range=0.08 on a $16.24
+            # stock, 0.49% — the tightest non-zero range ever entered; a $0.11
+            # stop-market slip was 79% of the $0.14 risk-per-share, producing
+            # -1.79R / -$892.75, the worst ORB loss on record). Threshold set at
+            # 0.5% of price — comfortably above STDN/AEVA/QURE's historical
+            # sub-0.5% entries (which all slipped worse than -1R) and below the
+            # ~1%+ ranges that make up the rest of the entered-trade history.
             s.orb_invalid = True
             print(f"  ORB {sym}: high={high:.2f}  low={low:.2f}  "
-                  f"range=0.00 — skipping (zero-width opening bar, no real stop level)")
+                  f"range={high - low:.2f} ({range_pct * 100:.2f}%) — "
+                  f"skipping (too tight, no real stop level)")
             return
         s.orb_high = high
         s.orb_low = low
