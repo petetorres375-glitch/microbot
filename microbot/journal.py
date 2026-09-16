@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS param_proposals (
     proposed_params_json TEXT, current_params_json TEXT,
     is_score REAL, oos_score REAL, current_oos_score REAL,
     improvement_pct REAL,
+    oos_trades INTEGER, current_oos_trades INTEGER,
     status TEXT DEFAULT 'pending',
     decided_ts TEXT, note TEXT
 );
@@ -119,6 +120,12 @@ def init():
         cols = {r[1] for r in con.execute("PRAGMA table_info(orders)")}
         if "closed" not in cols:
             con.execute("ALTER TABLE orders ADD COLUMN closed INTEGER DEFAULT 0")
+        # migrate existing DBs that predate the oos_trades/current_oos_trades columns
+        cols = {r[1] for r in con.execute("PRAGMA table_info(param_proposals)")}
+        if "oos_trades" not in cols:
+            con.execute("ALTER TABLE param_proposals ADD COLUMN oos_trades INTEGER")
+        if "current_oos_trades" not in cols:
+            con.execute("ALTER TABLE param_proposals ADD COLUMN current_oos_trades INTEGER")
 
 
 def _now():
@@ -339,13 +346,15 @@ def save_param_proposal(p: Dict) -> int:
         cur = con.execute(
             "INSERT INTO param_proposals"
             "(ts,strategy,proposed_params_json,current_params_json,"
-            "is_score,oos_score,current_oos_score,improvement_pct,status)"
-            " VALUES(?,?,?,?,?,?,?,?,'pending')",
+            "is_score,oos_score,current_oos_score,improvement_pct,"
+            "oos_trades,current_oos_trades,status)"
+            " VALUES(?,?,?,?,?,?,?,?,?,?,'pending')",
             (_now(), p["strategy"],
              _json.dumps(p["proposed_params"]),
              _json.dumps(p["current_params"]),
              p["is_score"], p["oos_score"],
-             p["current_oos_score"], p["improvement_pct"]),
+             p["current_oos_score"], p["improvement_pct"],
+             p.get("oos_trades"), p.get("current_oos_trades")),
         )
         return cur.lastrowid
 

@@ -86,9 +86,13 @@ def _grid(param_dict: Dict) -> List[Dict]:
             for vals in itertools.product(*param_dict.values())]
 
 
-def _universe_score(strat: Strategy, df_dict: Dict) -> float:
-    """Aggregate expectancy_r * sqrt(trades) across all symbols."""
+def _universe_score(strat: Strategy, df_dict: Dict) -> tuple[float, int]:
+    """Aggregate expectancy_r * sqrt(trades) across all symbols, plus the total
+    trade count backing that score (only counting symbols that actually met the
+    trades>=3/profit_factor>=1 threshold below, i.e. the trades the score is
+    actually built from)."""
     total = 0.0
+    trade_count = 0
     for sym, df in df_dict.items():
         if len(df) < strat.min_bars() + 10:
             continue
@@ -96,7 +100,8 @@ def _universe_score(strat: Strategy, df_dict: Dict) -> float:
         m = metrics.compute(trades)
         if m["trades"] >= 3 and (m["profit_factor"] or 0) >= 1.0:
             total += m["expectancy_r"] * math.sqrt(m["trades"])
-    return round(total, 4)
+            trade_count += m["trades"]
+    return round(total, 4), trade_count
 
 
 def _default_params(strat_name: str) -> Dict:
@@ -122,7 +127,7 @@ def _optimize_one(strat_name: str, df_is: Dict, df_oos: Dict,
     is_results = []
     for params in grid:
         strat = cls(rr=rr, **params)
-        score = _universe_score(strat, df_is)
+        score, _ = _universe_score(strat, df_is)
         is_results.append((score, params))
     is_results.sort(key=lambda x: x[0], reverse=True)
 
@@ -130,17 +135,18 @@ def _optimize_one(strat_name: str, df_is: Dict, df_oos: Dict,
     oos_results = []
     for is_score, params in is_results[:TOP_N]:
         strat = cls(rr=rr, **params)
-        oos_score = _universe_score(strat, df_oos)
-        oos_results.append((oos_score, is_score, params))
+        oos_score, oos_trades = _universe_score(strat, df_oos)
+        oos_results.append((oos_score, is_score, params, oos_trades))
     oos_results.sort(key=lambda x: x[0], reverse=True)
-    best_oos, best_is, best_params = oos_results[0]
+    best_oos, best_is, best_params, best_oos_trades = oos_results[0]
 
     # Baseline: current active params on the same OOS window.
     baseline = cls(rr=rr, **current_params)
-    current_oos = _universe_score(baseline, df_oos)
+    current_oos, current_oos_trades = _universe_score(baseline, df_oos)
 
     improvement = ((best_oos - current_oos) / max(abs(current_oos), 1e-6)) * 100
-    print(f"    proposed OOS={best_oos:.3f}  current OOS={current_oos:.3f}"
+    print(f"    proposed OOS={best_oos:.3f} ({best_oos_trades} trades)"
+          f"  current OOS={current_oos:.3f} ({current_oos_trades} trades)"
           f"  Δ={improvement:+.1f}%")
 
     if improvement < MIN_IMPROVEMENT_PCT:
@@ -155,6 +161,8 @@ def _optimize_one(strat_name: str, df_is: Dict, df_oos: Dict,
         "oos_score":        best_oos,
         "current_oos_score": current_oos,
         "improvement_pct":  round(improvement, 2),
+        "oos_trades":       best_oos_trades,
+        "current_oos_trades": current_oos_trades,
     }
 
 

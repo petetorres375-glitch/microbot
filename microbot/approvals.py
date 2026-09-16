@@ -182,8 +182,11 @@ def _interactive_params():
     for p in rows:
         proposed = json.loads(p["proposed_params_json"])
         current = json.loads(p["current_params_json"])
+        oos_trades = p["oos_trades"] if p["oos_trades"] is not None else "?"
+        cur_trades = p["current_oos_trades"] if p["current_oos_trades"] is not None else "?"
         print(f"  #{p['id']}  {p['strategy']}  +{p['improvement_pct']:.1f}% OOS")
-        print(f"       OOS score: {p['oos_score']:.3f}  (current: {p['current_oos_score']:.3f})")
+        print(f"       OOS score: {p['oos_score']:.3f} ({oos_trades} trades)"
+              f"  (current: {p['current_oos_score']:.3f}, {cur_trades} trades)")
         print(f"       proposed params: {json.dumps(proposed)}")
         print(f"       current  params: {json.dumps(current)}")
         ans = input(f"       approve #{p['id']}? [y]es / [n]o / [s]kip / [q]uit: ").strip().lower()
