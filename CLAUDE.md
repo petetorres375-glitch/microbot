@@ -394,7 +394,21 @@ Per user instruction (2026-07-01): watch for SPCX to reclaim the prior entry pri
 
 **`ema_pullback` paused 2026-07-15** via `DISABLED_STRATEGIES=ema_pullback` in `.env` (mechanism: `settings.disabled_strategies`, checked in `build_default_strategies()`/`build_strategies_from_params()` in `microbot/strategies.py`, commit `eaa10bf`). Reason: worst-performing strategy in the journal (14% win rate, −0.80R expectancy, −$277.85 over 7 trades) and the optimizer structurally can't tune it — see "Optimizer params updated 2026-07-13" correction below. Blocks new signals only; any existing positions opened by this strategy are unaffected and still managed normally by `trail.py`. `.env` is gitignored, so this pause is local-machine-only — doesn't need a push to take effect, but won't survive a fresh `.env` setup elsewhere. To resume: remove `ema_pullback` from `DISABLED_STRATEGIES` (or delete the line).
 
-**Portfolio state as of 2026-08-10 ~3:00 PM ET** (supersedes the 2026-07-24 snapshot below — kept for history): 5 of 8 `MAX_OPEN_POSITIONS` slots — **BB, EPD, ET, F, RLAY**, +$10.01 unrealized (0.20% of $5,000 starting equity).
+**Portfolio state as of 2026-09-17 market close** (supersedes the 2026-08-10 snapshot below — kept for history; several intervening snapshots between 8/10 and 9/17 were tracked only in session memory and never written here): 7 of 8 `MAX_OPEN_POSITIONS` slots — **AEHR, AMZN, BAC, EPD, ET, F, RLAY**, -$495.18 unrealized (-0.99% of $50,000 paper starting equity, currently inflated per the `.env` note below).
+
+| Symbol | Strategy | Shares | Entry | Close | Live Stop |
+|---|---|---|---|---|---|
+| AEHR | rsi2_reversion | 1 | $96.50 | $90.80 | $57.73 |
+| AMZN | rsi2_reversion | 2 | $262.04 | $251.02 | $238.24 |
+| BAC | rsi2_reversion | 134 | $59.09 | $58.18 | $55.38 |
+| EPD | dividend_momentum | 437 | $38.84 | $38.45 | $37.78 |
+| ET | dividend_momentum | 799 | $21.30 | $21.10 | $20.64 |
+| F | rsi2_reversion | 31 | $14.20 | $13.61 | $12.65 |
+| RLAY | trend_momentum | 20 | $18.96 | $19.19 | $16.47 |
+
+RLAY is the only green position; none are close to their stops. 4:00 PM trail check found no adjustments (nothing crossed +1R that day). ORB was flat that day ($0.00) — watched AEHL/AEMD/AXTI/BIAF, none broke their opening range. HOOD (`breakout`) had closed the day before (9/16) as the 4th of the 5-trade checkpoint above.
+
+**Portfolio state as of 2026-08-10 ~3:00 PM ET** (superseded by the 2026-09-17 snapshot above — kept for history): 5 of 8 `MAX_OPEN_POSITIONS` slots — **BB, EPD, ET, F, RLAY**, +$10.01 unrealized (0.20% of $5,000 starting equity).
 
 | Symbol | Strategy | Shares | Entry | Live Stop | Target |
 |---|---|---|---|---|---|
