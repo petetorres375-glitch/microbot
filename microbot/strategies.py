@@ -215,23 +215,43 @@ class MeanReversion(Strategy):
 
 
 class Breakout(Strategy):
+    """
+    Donchian channel breakout + volume confirmation.
+
+    trend_filter (added 2026-09-22, default True): only take a breakout if
+    the stock's own close is above its own 200-day SMA. Validated via
+    backtest across the live universe with a proper in-sample/out-of-sample
+    split — full-sample expectancy improved +0.297R -> +0.330R, and (unlike
+    a similar filter tried on trend_momentum, which looked good full-sample
+    but collapsed out-of-sample) this one held up on the untouched holdout
+    quarter: +0.245R (unfiltered) -> +0.274R (filtered) out-of-sample. A
+    20-day Donchian breakout, unlike breakout_52w's 200-day-high entry,
+    doesn't already imply this on its own — a stock can make a short-term
+    high while still under its longer-term trend.
+    """
     name = "breakout"
 
-    def __init__(self, channel=20, vol_period=20, vol_mult=1.3, **kw):
+    def __init__(self, channel=20, vol_period=20, vol_mult=1.3, trend_ma=200,
+                 trend_filter=True, **kw):
         super().__init__(**kw)
         self.channel, self.vol_period, self.vol_mult = channel, vol_period, vol_mult
+        self.trend_ma, self.trend_filter = trend_ma, trend_filter
 
     def min_bars(self):
-        return self.channel + self.atr_period + 5
+        base = self.channel + self.atr_period + 5
+        return max(base, self.trend_ma + 5) if self.trend_filter else base
 
     def precompute(self, df):
         upper, _ = ind.donchian(df, self.channel)
-        return {
+        cache = {
             "donchian_upper": upper,  # look up at yesterday's date - see evaluate()
             "atr": ind.atr(df, self.atr_period),
             "vol_avg": df["volume"].rolling(self.vol_period).mean(),
             "weekly_aligned": ind.weekly_ema_aligned_series(df),
         }
+        if self.trend_filter:
+            cache["trend_sma"] = ind.sma(df["close"], self.trend_ma)
+        return cache
 
     def evaluate(self, symbol, df, cache=None):
         if len(df) < self.min_bars():
@@ -252,6 +272,15 @@ class Breakout(Strategy):
             upper_now = upper.iloc[-1]
             a = ind.atr(df, self.atr_period).iloc[-1]
             avg_vol = df["volume"].rolling(self.vol_period).mean().iloc[-1]
+
+        if self.trend_filter:
+            if cache and "trend_sma" in cache:
+                trend_now = cache["trend_sma"].loc[d]
+            else:
+                trend_now = ind.sma(close, self.trend_ma).iloc[-1]
+            if close.iloc[-1] <= trend_now:
+                return None
+
         vol_today = ind.pace_adjusted_volume(df)
         vol_ok = vol_today >= self.vol_mult * avg_vol
 

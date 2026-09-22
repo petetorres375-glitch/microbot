@@ -11,7 +11,7 @@ import pytest
 
 from microbot import indicators as ind
 from microbot.engine import _sector_ok
-from microbot.strategies import MeanReversion, TrendMomentum
+from microbot.strategies import Breakout, MeanReversion, TrendMomentum
 
 
 # ---- helpers ---------------------------------------------------------------
@@ -156,3 +156,69 @@ def test_sector_ok_cap_one():
 def test_sector_ok_empty_held():
     smap = {"GOOG": "tech"}
     assert _sector_ok("GOOG", set(), sector_map=smap, max_same_sector=2) is True
+
+
+# ---- Breakout trend filter (added 2026-09-22) -------------------------------
+
+def _breakout_df_below_200sma(n: int = 250) -> pd.DataFrame:
+    """Long decline (300 -> ~90) so the 200-day SMA sits well above current
+    price, then a flat patch, then a fresh 20-day-high breakout with a
+    volume spike on the last bar — a real Donchian breakout, but one that
+    happens while the stock is still well under its own 200-day trend."""
+    dates = pd.bdate_range("2021-01-01", periods=n)
+    prices = np.zeros(n)
+    prices[:230] = 300.0 - np.arange(230) * (210.0 / 230)   # 300 -> ~90
+    prices[230:249] = 90.0 + np.sin(np.arange(19)) * 0.5     # flat chop ~90
+    prices[249] = 105.0                                       # breakout bar
+    volume = np.full(n, 1_000_000)
+    volume[249] = 5_000_000  # clear volume confirmation
+    return pd.DataFrame({
+        "open": prices - 0.5, "high": prices + 1.0,
+        "low": prices - 1.0, "close": prices, "volume": volume,
+    }, index=dates)
+
+
+def _breakout_df_above_200sma(n: int = 250) -> pd.DataFrame:
+    """Long uptrend (10 -> ~200) so the 200-day SMA sits well below current
+    price, then a flat patch, then a fresh 20-day-high breakout with a
+    volume spike on the last bar."""
+    dates = pd.bdate_range("2021-01-01", periods=n)
+    prices = np.zeros(n)
+    prices[:230] = 10.0 + np.arange(230) * (190.0 / 230)     # 10 -> ~200
+    prices[230:249] = 200.0 + np.sin(np.arange(19)) * 0.5     # flat chop ~200
+    prices[249] = 215.0                                        # breakout bar
+    volume = np.full(n, 1_000_000)
+    volume[249] = 5_000_000
+    return pd.DataFrame({
+        "open": prices - 0.5, "high": prices + 1.0,
+        "low": prices - 1.0, "close": prices, "volume": volume,
+    }, index=dates)
+
+
+def test_breakout_trend_filter_blocks_when_below_200sma():
+    df = _breakout_df_below_200sma()
+    strat = Breakout(weekly_filter=False)  # trend_filter defaults to True
+    assert strat.evaluate("XYZ", df) is None
+
+
+def test_breakout_trend_filter_disabled_allows_the_same_setup():
+    df = _breakout_df_below_200sma()
+    strat = Breakout(weekly_filter=False, trend_filter=False)
+    sig = strat.evaluate("XYZ", df)
+    assert sig is not None
+    assert sig.strategy == "breakout"
+
+
+def test_breakout_fires_when_above_200sma():
+    df = _breakout_df_above_200sma()
+    strat = Breakout(weekly_filter=False)  # trend_filter defaults to True
+    sig = strat.evaluate("XYZ", df)
+    assert sig is not None
+    assert sig.stop < sig.entry < sig.target
+
+
+def test_breakout_min_bars_reflects_trend_filter():
+    with_filter = Breakout(trend_filter=True, trend_ma=200)
+    without_filter = Breakout(trend_filter=False)
+    assert with_filter.min_bars() >= 200
+    assert without_filter.min_bars() < with_filter.min_bars()
