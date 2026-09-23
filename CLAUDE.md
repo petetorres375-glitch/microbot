@@ -424,7 +424,7 @@ Review: `python -m microbot.approvals --symbols` shows IS vs OOS expectancy/trad
 
 Throttled to once per 7 days via `scan_log` key `symbol_discovery` (`--force` overrides). Runs locally only (needs Alpaca bars, blocked from CCR). **On the crontab since 2026-09-22** (Mondays 7 AM ET, after the 6 AM optimizer; log `symbol_discovery.log`) — verified by running the exact line under a cron-like `env -i` shell.
 
-**First run 2026-09-22:** 19 evaluated → 2 pending (**BFLY** $9.93 trend_momentum, IS +0.93R/14, OOS +0.43R/6; **NU** $14.16 trend_momentum, IS +0.85R/13, OOS +0.41R/7 — both low-sample), 17 auto-rejected (9 thin OOS sample incl. AAPL/JPM/SCHW — retry ~2026-12-21; MU on sizing; the rest losing backtests). DB backed up first as `microbot.db.bak-20260922-195630-pre-discovery`.
+**First run 2026-09-22:** 19 evaluated → 2 pending (**BFLY** $9.93 trend_momentum, IS +0.93R/14, OOS +0.43R/6; **NU** $14.16 trend_momentum, IS +0.85R/13, OOS +0.41R/7 — both low-sample), 17 auto-rejected (9 thin OOS sample incl. AAPL/JPM/SCHW — retry ~2026-12-21; MU on sizing; the rest losing backtests). DB was backed up before the run; backup deleted same evening once the run checked out.
 
 Known limits: Yahoo's lists skew toward hype names (a `TradingClient.get_all_assets()` liquidity-filtered source could be added later); one symbol's OOS sample is thin, so the check screens out obvious overfits rather than proving an edge — real validation is still live trades.
 
