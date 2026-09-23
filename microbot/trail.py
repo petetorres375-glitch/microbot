@@ -16,8 +16,9 @@ Sheets Health column keeps the original-risk denominator for its R-multiples.
 """
 from __future__ import annotations
 
-from datetime import date
+from datetime import datetime
 from typing import List, Dict, Optional
+from zoneinfo import ZoneInfo
 
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockLatestTradeRequest
@@ -26,6 +27,8 @@ from alpaca.trading.requests import ReplaceOrderRequest
 
 from . import journal
 from .config import settings
+
+ET = ZoneInfo("America/New_York")
 
 
 def _verified_price(data_client, symbol: str) -> Optional[float]:
@@ -39,7 +42,9 @@ def _verified_price(data_client, symbol: str) -> Optional[float]:
         return None
     if not t or float(t.size or 0) <= 0:
         return None
-    if t.timestamp.date() != date.today():
+    # Compare trading days in market time: Alpaca stamps prints in UTC, which
+    # rolls to tomorrow at 8 PM ET.
+    if t.timestamp.astimezone(ET).date() != datetime.now(ET).date():
         return None
     return float(t.price)
 

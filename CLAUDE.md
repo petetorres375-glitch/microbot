@@ -428,7 +428,7 @@ Throttled to once per 7 days via `scan_log` key `symbol_discovery` (`--force` ov
 
 Known limits: Yahoo's lists skew toward hype names (a `TradingClient.get_all_assets()` liquidity-filtered source could be added later); one symbol's OOS sample is thin, so the check screens out obvious overfits rather than proving an edge — real validation is still live trades.
 
-**Unrelated pre-existing test flake found same day:** 4 tests in `tests/test_trail.py` fail between 8 PM ET and midnight — the fake trade print is stamped with the UTC date while `trail.py` compares against local `date.today()`, and UTC rolls over at 8 PM EDT. Suite passes with `TZ=UTC`. Production unaffected (trail only runs 9:36 AM–4 PM ET, when the dates agree). Not fixed yet.
+**Unrelated pre-existing test flake found same day:** 4 tests in `tests/test_trail.py` fail between 8 PM ET and midnight — the fake trade print is stamped with the UTC date while `trail.py` compares against local `date.today()`, and UTC rolls over at 8 PM EDT. Production was never affected (trail only runs 9:36 AM–4 PM ET, when the dates agree). **Fixed same evening** in the code, not the tests: `trail._verified_price()` now compares the print's date and today's date both in `America/New_York`, plus a frozen-clock regression test (8:30 PM ET) that fails on the old code at any time of day.
 
 ## Rebalance command (`rebalance.py`)
 

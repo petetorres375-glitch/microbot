@@ -225,3 +225,22 @@ def test_oco_canceled_stop_leg_not_used():
     broker.client.orders_by_id["oco-target-2"] = oco_target
     assert run(broker, data, rows) == []
     assert broker.client.replaced == []
+
+
+class _FrozenET(datetime):
+    """8:30 PM ET on 2026-09-22 — already 2026-09-23 in UTC."""
+    @classmethod
+    def now(cls, tz=None):
+        return datetime(2026, 9, 23, 0, 30, tzinfo=timezone.utc).astimezone(tz)
+
+
+@pytest.mark.parametrize("print_utc,ok", [
+    (datetime(2026, 9, 22, 19, 55, tzinfo=timezone.utc), True),   # 3:55 PM ET same day
+    (datetime(2026, 9, 23, 0, 15, tzinfo=timezone.utc), True),    # 8:15 PM ET, UTC says tomorrow
+    (datetime(2026, 9, 21, 19, 55, tzinfo=timezone.utc), False),  # prior trading day
+])
+def test_verified_price_uses_market_date_not_utc(print_utc, ok):
+    from microbot import trail
+    data = FakeDataClient({"XYZ": FakeTrade(price=10.0, timestamp=print_utc)})
+    with patch.object(trail, "datetime", _FrozenET):
+        assert (trail._verified_price(data, "XYZ") == 10.0) is ok
