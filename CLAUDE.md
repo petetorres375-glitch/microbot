@@ -71,7 +71,7 @@ CCR routines handle analysis and research. **Execution (actual order placement) 
 ```
 # crontab -l (as of 2026-09-22 evening, ORB paused, symbol discovery added)
 SHELL=/bin/bash
-50 8 * * 1-5 cd /home/lenovo-home/microbot && source .venv/bin/activate && python -u fetch_verdicts.py >> /home/lenovo-home/microbot/verdicts.log 2>&1
+5 9 * * 1-5 cd /home/lenovo-home/microbot && source .venv/bin/activate && python -u fetch_verdicts.py >> /home/lenovo-home/microbot/verdicts.log 2>&1
 35 9 * * 1-5 cd /home/lenovo-home/microbot && git pull --quiet && source .venv/bin/activate && python -u -m microbot.engine >> /home/lenovo-home/microbot/engine.log 2>&1
 36 9 * * 1-5 cd /home/lenovo-home/microbot && source .venv/bin/activate && python -u -m microbot.trail >> /home/lenovo-home/microbot/trail.log 2>&1
 30 10-15 * * 1-5 cd /home/lenovo-home/microbot && source .venv/bin/activate && python -u -m microbot.trail >> /home/lenovo-home/microbot/trail.log 2>&1
@@ -100,7 +100,7 @@ SHELL=/bin/bash
 
 **Important:** `SHELL=/bin/bash` is required — cron defaults to `/bin/sh` (dash on Ubuntu) which does not support `source`. Without it, both jobs silently fail at the activate step and never run.
 
-The `fetch_verdicts.py` cron at 8:50 AM bridges the CCR verdicts to git: the 8:30 AM CCR routine writes `morning_verdicts_ccr.json` to a Google Drive folder (GitHub push is blocked from the CCR container), and this script reads it via the service account, writes `morning_verdicts.json`, and commits + pushes so the 9:35 AM engine picks up fresh verdicts. Drive folder: `12_v9m-kyzN4KrUMCXdObQlTEkUBqM7OP` (owned by pete.torres.375@gmail.com, shared with `sheets-bot@sheets-automation-495422.iam.gserviceaccount.com`). Falls back to Google Sheet "Verdicts" tab if Drive file not found. Log: `verdicts.log`.
+The `fetch_verdicts.py` cron at 9:05 AM (moved from 8:50 on 2026-09-23 — that morning the CCR routine wrote its Drive file at 8:50:24, 24s after the fetch had already run, so the engine got no verdicts; 9:05 leaves slack and still finishes well before the 9:35 engine) bridges the CCR verdicts to git: the 8:30 AM CCR routine writes `morning_verdicts_ccr.json` to a Google Drive folder (GitHub push is blocked from the CCR container), and this script reads it via the service account, writes `morning_verdicts.json`, and commits + pushes so the 9:35 AM engine picks up fresh verdicts. Drive folder: `12_v9m-kyzN4KrUMCXdObQlTEkUBqM7OP` (owned by pete.torres.375@gmail.com, shared with `sheets-bot@sheets-automation-495422.iam.gserviceaccount.com`). Falls back to Google Sheet "Verdicts" tab if Drive file not found. Log: `verdicts.log`.
 
 `watch_spcx.py` (added 2026-07-01, same cadence as `trail.py` above) watches for SPCX to reclaim a trigger price and re-buys — see "SPCX Long-Term Hold" section below. Log: `watch_spcx.log`.
 
