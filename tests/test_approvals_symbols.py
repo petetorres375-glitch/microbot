@@ -6,7 +6,11 @@ from microbot import approvals, journal
 @pytest.fixture
 def db(tmp_path, monkeypatch):
     monkeypatch.setattr(journal.settings, "db_path", str(tmp_path / "t.db"))
+    monkeypatch.setattr(journal.settings, "universe_exclusions", ["AMD"])
+    published = []
+    monkeypatch.setattr(approvals, "_publish_approved_file", published.append)  # no real git
     journal.init()
+    return published
 
 
 def _save(symbol="XYZ", oos_trades=20):
@@ -42,3 +46,20 @@ def test_interactive_y_n_s(db, monkeypatch):
     assert journal.fetch_approved_universe() == ["AAA"]
     assert [r["symbol"] for r in journal.fetch_rejected_discovered()] == ["BBB"]
     assert [p["symbol"] for p in journal.fetch_pending_discovered()] == ["CCC"]
+
+
+def test_approve_publishes_only_on_success(db):
+    a = _save("AAA")
+    approvals.approve_symbol(a)
+    approvals.approve_symbol(a)          # already approved: no second publish
+    approvals.reject_symbol(_save("BBB"))
+    assert db == ["AAA"]
+
+
+def test_approved_file_contents(db, tmp_path):
+    for s in ("AAA", "AMD"):
+        journal.approve_discovered_symbol(_save(s))
+    path = tmp_path / "approved_universe.txt"
+    assert approvals.write_approved_file(str(path)) == ["AAA"]   # exclusions dropped
+    lines = [l for l in path.read_text().splitlines() if not l.startswith("#")]
+    assert lines == ["AAA"]

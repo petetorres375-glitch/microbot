@@ -19,6 +19,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import subprocess
+from typing import List
 
 from . import journal
 from .broker import Broker
@@ -204,6 +207,37 @@ def _interactive_params():
 
 LOW_SAMPLE_OOS_TRADES = 15
 
+# Tracked export of approved_universe. The morning-verdicts CCR routine reads
+# the universe from git and has no microbot.db (gitignored), so without this
+# file approved symbols would never get a verdict — and never trade.
+APPROVED_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                             "approved_universe.txt")
+
+
+def write_approved_file(path: str = APPROVED_FILE) -> List[str]:
+    excluded = set(settings.universe_exclusions)
+    symbols = [s for s in journal.fetch_approved_universe() if s not in excluded]
+    with open(path, "w") as f:
+        f.write("# Discovery-approved symbols (python -m microbot.approvals --symbols).\n"
+                "# Generated from microbot.db — do not edit by hand.\n")
+        f.writelines(f"{s}\n" for s in symbols)
+    return symbols
+
+
+def _publish_approved_file(symbol: str) -> None:
+    """Commit + push only approved_universe.txt so the 8:30 AM verdicts routine sees it."""
+    write_approved_file()
+    repo = os.path.dirname(APPROVED_FILE)
+    try:
+        subprocess.run(["git", "add", APPROVED_FILE], cwd=repo, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", f"approved universe: add {symbol}",
+                        "--", APPROVED_FILE], cwd=repo, check=True)
+        subprocess.run(["git", "push", "-q"], cwd=repo, check=True)
+        print(f"       pushed approved_universe.txt — {symbol} gets verdicts from the next 8:30 AM run")
+    except subprocess.CalledProcessError as e:
+        print(f"       ! git step failed ({e}) — {symbol} is approved locally but the verdicts "
+              "routine won't see it until approved_universe.txt is pushed")
+
 
 def pending_symbols():
     journal.init()
@@ -214,6 +248,7 @@ def approve_symbol(discovered_id: int) -> dict:
     journal.init()
     if journal.approve_discovered_symbol(discovered_id):
         d = journal.get_discovered_symbol(discovered_id)
+        _publish_approved_file(d["symbol"])
         return {"ok": True, "msg": f"{d['symbol']} added to the scanned universe"}
     return {"ok": False, "msg": f"candidate #{discovered_id} not found or not pending"}
 

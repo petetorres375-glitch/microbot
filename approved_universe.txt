@@ -1,0 +1,2 @@
+# Discovery-approved symbols (python -m microbot.approvals --symbols).
+# Generated from microbot.db — do not edit by hand.
