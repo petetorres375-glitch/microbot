@@ -69,7 +69,7 @@ View routine results at: https://claude.ai/code/routines
 CCR routines handle analysis and research. **Execution (actual order placement) runs locally** — the CCR container's network sandbox blocks outbound connections to Alpaca, so the engine must run on the local machine where Alpaca API is reachable.
 
 ```
-# crontab -l (as of 2026-09-22, ORB paused)
+# crontab -l (as of 2026-09-22 evening, ORB paused, symbol discovery added)
 SHELL=/bin/bash
 50 8 * * 1-5 cd /home/lenovo-home/microbot && source .venv/bin/activate && python -u fetch_verdicts.py >> /home/lenovo-home/microbot/verdicts.log 2>&1
 35 9 * * 1-5 cd /home/lenovo-home/microbot && git pull --quiet && source .venv/bin/activate && python -u -m microbot.engine >> /home/lenovo-home/microbot/engine.log 2>&1
@@ -85,6 +85,7 @@ SHELL=/bin/bash
 36 9 * * 1-5 cd /home/lenovo-home/microbot && source .venv/bin/activate && python -u -m microbot.reconcile >> /home/lenovo-home/microbot/reconcile.log 2>&1
 30 10-15 * * 1-5 cd /home/lenovo-home/microbot && source .venv/bin/activate && python -u -m microbot.reconcile >> /home/lenovo-home/microbot/reconcile.log 2>&1
 0 16 * * 1-5 cd /home/lenovo-home/microbot && source .venv/bin/activate && python -u -m microbot.reconcile >> /home/lenovo-home/microbot/reconcile.log 2>&1
+0 7 * * 1 cd /home/lenovo-home/microbot && source .venv/bin/activate && python -u run_symbol_discovery.py >> /home/lenovo-home/microbot/symbol_discovery.log 2>&1
 ```
 
 **Removed 2026-09-22 (ORB paused — see "ORB gate FAILED" note below):** `34 9 * * 1-5 ... run_intraday.py` and `15 9 * * 1-5 ... microbot.intraday_scanner`. To resume ORB, re-add both lines exactly as they read in git history before this date (`git log -p -- CLAUDE.md` around this commit, or see the "Automation" line under "Day trading layer (ORB)" below for the exact commands). `check_orb_gate.py`'s cron (`5 16 * * 1-5`) already self-deleted on 2026-09-22 per its own designed one-shot behavior, independent of the ORB pause — it will not need re-adding unless a fresh 15-trade gate check is wanted later.
@@ -421,7 +422,7 @@ Flow (`microbot/symbol_discovery.py`, entry point `run_symbol_discovery.py`):
 
 Review: `python -m microbot.approvals --symbols` shows IS vs OOS expectancy/trade counts side by side, with a "low sample — directional only" warning under 15 OOS trades. Approved symbols still only trade on a live signal **and** a CLEAN morning verdict — discovery changes what gets scanned, not the execution gate. Approved symbols have no `sector_map` entry, so the max-2-per-sector cap doesn't apply to them (same as RLAY/NOK/etc. today — not a bug).
 
-Throttled to once per 7 days via `scan_log` key `symbol_discovery` (`--force` overrides). Runs locally only (needs Alpaca bars, blocked from CCR). **Not yet on the crontab** — intended line: `0 7 * * 1 cd /home/lenovo-home/microbot && source .venv/bin/activate && python -u run_symbol_discovery.py >> /home/lenovo-home/microbot/symbol_discovery.log 2>&1` (Mondays 7 AM ET, after the 6 AM optimizer).
+Throttled to once per 7 days via `scan_log` key `symbol_discovery` (`--force` overrides). Runs locally only (needs Alpaca bars, blocked from CCR). **On the crontab since 2026-09-22** (Mondays 7 AM ET, after the 6 AM optimizer; log `symbol_discovery.log`) — verified by running the exact line under a cron-like `env -i` shell.
 
 **First run 2026-09-22:** 19 evaluated → 2 pending (**BFLY** $9.93 trend_momentum, IS +0.93R/14, OOS +0.43R/6; **NU** $14.16 trend_momentum, IS +0.85R/13, OOS +0.41R/7 — both low-sample), 17 auto-rejected (9 thin OOS sample incl. AAPL/JPM/SCHW — retry ~2026-12-21; MU on sizing; the rest losing backtests). DB backed up first as `microbot.db.bak-20260922-195630-pre-discovery`.
 
