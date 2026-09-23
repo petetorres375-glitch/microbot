@@ -31,6 +31,7 @@ The bot's job is to:
 - **Dividend universe** (`DIVIDEND_UNIVERSE`): income-focused, lower-beta names — trimmed 2026-06-26 to 5 backtest-positive names only: **KMI, BTI, ET, MO, EPD**. Dropped VZ, AGNC, NLY, STAG (negative expectancy), CVX (flat), ABBV (−42R max drawdown crushes score), O (< 8 backtest trades). Set via `.env` override; toggle with `INCLUDE_DIVIDEND_STOCKS`.
 - **Split universe** (`SPLIT_UNIVERSE`): post-split momentum names now affordable (NVDA, TSLA, AMZN, SHOP) — toggle with `INCLUDE_SPLIT_STOCKS`. GOOG removed 2026-08-17, see note below.
 - **IPO universe** (`IPO_UNIVERSE`): recent IPOs with limited history, scanned with a shorter 180-day lookback — toggle with `INCLUDE_IPO_STOCKS`, tune lookback with `IPO_LOOKBACK_DAYS`. Auto-discovered via SEC EDGAR 8-A12B filings + Alpaca validation; cached in DB, rescanned every 24h. Manually add extra tickers via `IPO_UNIVERSE=`. Current manual addition: **SPCX** (SpaceX, IPO 2026-06-12). SPCX is also a personal long-term hold — not a bot swing trade. Stop triggered 2026-07-01 at $155.44, filled at $157.62 (entry $163.62, 6 shares, −$36.01). `watch_spcx.py` (cron, same cadence as `trail.py`) watches for a reclaim of $163.62 and re-buys automatically, sized off `starting_equity` with a 5% OCO stop — see "SPCX Long-Term Hold" section below.
+- **Discovered universe** (`approved_universe` DB table, added 2026-09-22): symbols found by weekly `run_symbol_discovery.py` and approved by the user via `python -m microbot.approvals --symbols` — merged into the scan by `screener.research()` (and `rebaseline._combined_universe()`); toggle with `INCLUDE_DISCOVERED_STOCKS`. `UNIVERSE_EXCLUSIONS` (default `AMD,ALAB,GOOG`) blocks a symbol from discovery **and** from the scan even if previously approved — that's the one-line way to drop an approved symbol. See "Symbol discovery pipeline" below.
 
 ## Strategies
 
@@ -270,6 +271,8 @@ The bot uses bracket orders (entry + stop + take-profit in one atomic order). Al
 | `run_optimizer.py` | Run optimizer + write proposals JSON |
 | `import_proposals.py` | Import remote proposals into local DB |
 | `run_research.py` | Research-only scan (no trades) |
+| `microbot/symbol_discovery.py` | Weekly new-symbol discovery: OOS + live-account sizing check, queues for approval |
+| `run_symbol_discovery.py` | Run discovery (`--force`, `--list`) |
 
 ## Morning verdicts integration
 
@@ -321,6 +324,10 @@ python rebalance.py --target IREN,LEGN,LUNR,TGTX,KEEL --dry-run  # preview
 
 # Run optimizer manually
 python run_optimizer.py
+
+# Find new stocks outside the universe (weekly-throttled), then review them
+python run_symbol_discovery.py [--force]
+python -m microbot.approvals --symbols
 ```
 
 ## Day trading layer (ORB)
@@ -396,6 +403,29 @@ Prompted by the user asking for R-expectancy to be raised without sacrificing wi
 **Task 7 (allocation proposal):** delivered as an honest reversal of the original hypothesis — the data supports weighting toward `breakout`/momentum, not mean reversion. `mean_reversion` excluded from consideration (already fires zero live signals anyway under current settings). `breakout_52w`'s promising OOS number (+0.601R) rests on only 47 trades — flagged as unresolved, not confirmed, needs more live data before trusting it. No slot-quota mechanism exists in the bot (positions fill by ranked CLEAN signals, not a reserved-slots system) — implementing one would be new code, not something this review built.
 
 **Live change made (approved same day):** `Breakout.trend_filter` (default `True`) — see the `breakout` strategy class docstring in `microbot/strategies.py` for the validated numbers. This is the only strategy change adopted from the whole review; everything else (Tasks 2-5, and `trend_momentum`/`breakout_52w` from Task 6) concluded "don't change it," backed by real IS/OOS evidence rather than the full-sample numbers alone.
+
+## Symbol discovery pipeline (2026-09-22)
+
+Prompted by the user asking whether to clear the universe and let the bot find profitable stocks itself. Decision: **don't clear it** (AMD/ALAB/GOOG were cut for documented reasons a fresh scan would forget) — **add a human-gated discovery layer on top**, same "nothing auto-promoted" rule as the optimizer's `param_proposals`.
+
+Flow (`microbot/symbol_discovery.py`, entry point `run_symbol_discovery.py`):
+1. `yahoo_scanner.fetch_candidates()` (Yahoo trending + most-active, ~50 tickers) as the source + full-sample prefilter — previously this only printed at the end of `run_research.py` ("add to .env manually"); that printout was removed.
+2. Drop anything in `UNIVERSE_EXCLUSIONS`, the current universe, `approved_universe`, already-pending, or blocked by a prior rejection (see retry rule below).
+3. Re-fetch full `LOOKBACK_DAYS` history, backtest the **live** strategy set (promoted params, `disabled_strategies` honored — same as the engine; dividend strategies not included since approved symbols scan as ordinary non-dividend names), 75/25 IS/OOS split via `overfitting_check.split_trades_by_period()`. **Strategy is picked by in-sample expectancy only**, then its OOS result is reported — picking by OOS would make the OOS check meaningless (tested).
+4. Sizing check: can 1 share fit the per-trade risk budget at **`DISCOVERY_SIZING_EQUITY`** (default 5000 — the planned live account), *not* `STARTING_EQUITY` (temporarily 50000 in paper). User decision 2026-09-22: at $50k paper equity AMD ($624, $53/share 2×ATR risk) would size fine, but it's untradable at the $5k go-live — so discovery shouldn't propose names paper can trade but live can't. **Raise `DISCOVERY_SIZING_EQUITY` as the live account grows** ($1k/mo contributions).
+5. Save to `discovered_symbols`: **pending** if IS expectancy > 0, OOS ≥ 5 trades, OOS expectancy > 0, sizing OK; otherwise **rejected** with a plain-English note.
+
+**Rejection retry rule (user decision 2026-09-22):** a human "no" or a losing backtest (`in-sample expectancy <= 0` / `oos expectancy <= 0`) is permanent. "Not enough evidence yet" (`oos sample < 5`, `no strategy with 5+ in-sample trades`) and `sizing:` rejections are re-checked after 90 days (`RETRY_AFTER_DAYS`). Any permanent rejection on a symbol wins over an expired retryable one.
+
+Review: `python -m microbot.approvals --symbols` shows IS vs OOS expectancy/trade counts side by side, with a "low sample — directional only" warning under 15 OOS trades. Approved symbols still only trade on a live signal **and** a CLEAN morning verdict — discovery changes what gets scanned, not the execution gate. Approved symbols have no `sector_map` entry, so the max-2-per-sector cap doesn't apply to them (same as RLAY/NOK/etc. today — not a bug).
+
+Throttled to once per 7 days via `scan_log` key `symbol_discovery` (`--force` overrides). Runs locally only (needs Alpaca bars, blocked from CCR). **Not yet on the crontab** — intended line: `0 7 * * 1 cd /home/lenovo-home/microbot && source .venv/bin/activate && python -u run_symbol_discovery.py >> /home/lenovo-home/microbot/symbol_discovery.log 2>&1` (Mondays 7 AM ET, after the 6 AM optimizer).
+
+**First run 2026-09-22:** 19 evaluated → 2 pending (**BFLY** $9.93 trend_momentum, IS +0.93R/14, OOS +0.43R/6; **NU** $14.16 trend_momentum, IS +0.85R/13, OOS +0.41R/7 — both low-sample), 17 auto-rejected (9 thin OOS sample incl. AAPL/JPM/SCHW — retry ~2026-12-21; MU on sizing; the rest losing backtests). DB backed up first as `microbot.db.bak-20260922-195630-pre-discovery`.
+
+Known limits: Yahoo's lists skew toward hype names (a `TradingClient.get_all_assets()` liquidity-filtered source could be added later); one symbol's OOS sample is thin, so the check screens out obvious overfits rather than proving an edge — real validation is still live trades.
+
+**Unrelated pre-existing test flake found same day:** 4 tests in `tests/test_trail.py` fail between 8 PM ET and midnight — the fake trade print is stamped with the UTC date while `trail.py` compares against local `date.today()`, and UTC rolls over at 8 PM EDT. Suite passes with `TZ=UTC`. Production unaffected (trail only runs 9:36 AM–4 PM ET, when the dates agree). Not fixed yet.
 
 ## Rebalance command (`rebalance.py`)
 
@@ -540,6 +570,9 @@ MAX_OPEN_POSITIONS=8
 INCLUDE_DIVIDEND_STOCKS=true
 INCLUDE_SPLIT_STOCKS=true
 GSHEET_ID=...
+UNIVERSE_EXCLUSIONS=AMD,ALAB,GOOG   # never proposed by discovery, dropped from scan even if approved
+DISCOVERY_SIZING_EQUITY=5000       # discovery sizing check uses the planned LIVE account size
+INCLUDE_DISCOVERED_STOCKS=true
 ```
 
 **`STARTING_EQUITY` set to 50000 on 2026-08-28** (user request, deliberately kept — not a one-off test that got left behind). This does **not** change the real live-funding plan: user will fund the live account with $5,000 + $1,000/month once trading goes live (see the retirement roadmap memory), and will revert `STARTING_EQUITY` back to `5000` at that point. Until then, paper sizes positions as if equity were $50k (~10x the share counts/dollar risk vs. the $5k baseline) — this only affects paper position sizing, not the actual funding plan. Don't "fix" this back to 5000 without asking; it's intentional.

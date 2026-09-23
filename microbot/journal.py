@@ -73,6 +73,21 @@ CREATE TABLE IF NOT EXISTS scan_log (
     key TEXT PRIMARY KEY,
     ts TEXT
 );
+CREATE TABLE IF NOT EXISTS discovered_symbols (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT, source TEXT, discovered_ts TEXT, strategy TEXT,
+    is_expectancy_r REAL, is_trades INTEGER,
+    oos_expectancy_r REAL, oos_trades INTEGER, oos_win_rate REAL,
+    price REAL, risk_per_share REAL, sizing_ok INTEGER,
+    status TEXT DEFAULT 'pending',   -- pending | approved | rejected
+    decided_ts TEXT, note TEXT
+);
+CREATE TABLE IF NOT EXISTS approved_universe (
+    symbol TEXT PRIMARY KEY,
+    approved_ts TEXT,
+    source TEXT,
+    discovered_id INTEGER
+);
 CREATE TABLE IF NOT EXISTS intraday_trades (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     date TEXT,
@@ -434,6 +449,85 @@ def reject_discovered_ipo(symbol: str):
             " VALUES(?, ?, 'rejected')",
             (symbol.upper(), _now()),
         )
+
+
+# ---- Symbol discovery (pending → approved → approved_universe) ----
+
+def save_discovered_symbol(d: Dict, status: str = "pending", note: str = "") -> int:
+    """Saves a discovery candidate. Auto-rejected candidates are saved too
+    (status='rejected' + note) so they're auditable and never re-proposed."""
+    decided = _now() if status != "pending" else None
+    with _conn() as con:
+        cur = con.execute(
+            "INSERT INTO discovered_symbols"
+            "(symbol,source,discovered_ts,strategy,is_expectancy_r,is_trades,"
+            "oos_expectancy_r,oos_trades,oos_win_rate,price,risk_per_share,"
+            "sizing_ok,status,decided_ts,note)"
+            " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (d["symbol"].upper(), d.get("source"), _now(), d.get("strategy"),
+             d.get("is_expectancy_r"), d.get("is_trades"),
+             d.get("oos_expectancy_r"), d.get("oos_trades"), d.get("oos_win_rate"),
+             d.get("price"), d.get("risk_per_share"),
+             1 if d.get("sizing_ok") else 0, status, decided, note),
+        )
+        return cur.lastrowid
+
+
+def fetch_pending_discovered() -> List[Dict]:
+    with _conn() as con:
+        return [dict(r) for r in con.execute(
+            "SELECT * FROM discovered_symbols WHERE status='pending'"
+            " ORDER BY oos_expectancy_r DESC"
+        )]
+
+
+def get_discovered_symbol(discovered_id: int) -> Dict | None:
+    with _conn() as con:
+        row = con.execute(
+            "SELECT * FROM discovered_symbols WHERE id=?", (discovered_id,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def approve_discovered_symbol(discovered_id: int) -> bool:
+    """Adds the symbol to approved_universe. Returns False unless the row is pending."""
+    d = get_discovered_symbol(discovered_id)
+    if not d or d["status"] != "pending":
+        return False
+    with _conn() as con:
+        # DO NOTHING, not DO UPDATE: once approved, a symbol stays approved as-is.
+        con.execute(
+            "INSERT INTO approved_universe(symbol,approved_ts,source,discovered_id)"
+            " VALUES(?,?,?,?) ON CONFLICT(symbol) DO NOTHING",
+            (d["symbol"], _now(), d["source"], discovered_id),
+        )
+        con.execute(
+            "UPDATE discovered_symbols SET status='approved', decided_ts=? WHERE id=?",
+            (_now(), discovered_id),
+        )
+    return True
+
+
+def reject_discovered_symbol(discovered_id: int, note: str = ""):
+    with _conn() as con:
+        con.execute(
+            "UPDATE discovered_symbols SET status='rejected', decided_ts=?, note=? WHERE id=?",
+            (_now(), note, discovered_id),
+        )
+
+
+def fetch_approved_universe() -> List[str]:
+    with _conn() as con:
+        return [r["symbol"] for r in con.execute(
+            "SELECT symbol FROM approved_universe ORDER BY approved_ts"
+        ).fetchall()]
+
+
+def fetch_rejected_discovered() -> List[Dict]:
+    with _conn() as con:
+        return [dict(r) for r in con.execute(
+            "SELECT symbol, note, decided_ts FROM discovered_symbols WHERE status='rejected'"
+        )]
 
 
 def get_scan_log(key: str) -> str | None:

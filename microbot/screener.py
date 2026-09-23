@@ -26,7 +26,7 @@ from typing import Dict, List
 from .backtest import backtest_symbol
 from .data import MarketData
 from . import metrics
-from . import ipo_scanner
+from . import ipo_scanner, journal
 from .strategies import build_default_strategies, build_dividend_strategies, build_strategies_from_params
 from .config import settings
 
@@ -108,6 +108,12 @@ def research(universe: List[str] | None = None, rr: float | None = None,
         for sym in settings.split_universe:
             sym = sym.strip().upper()
             if sym not in all_symbols:
+                all_symbols.append(sym)
+    if settings.include_discovered_stocks:
+        journal.init()
+        excluded = set(settings.universe_exclusions)
+        for sym in journal.fetch_approved_universe():
+            if sym not in excluded and sym not in all_symbols:
                 all_symbols.append(sym)
     if settings.include_ipo_stocks:
         # Merge manually configured tickers with EDGAR auto-discovered ones.

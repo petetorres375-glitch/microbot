@@ -200,17 +200,83 @@ def _interactive_params():
             print("       skipped (stays pending)")
 
 
+# ---- discovered-symbol review ----
+
+LOW_SAMPLE_OOS_TRADES = 15
+
+
+def pending_symbols():
+    journal.init()
+    return journal.fetch_pending_discovered()
+
+
+def approve_symbol(discovered_id: int) -> dict:
+    journal.init()
+    if journal.approve_discovered_symbol(discovered_id):
+        d = journal.get_discovered_symbol(discovered_id)
+        return {"ok": True, "msg": f"{d['symbol']} added to the scanned universe"}
+    return {"ok": False, "msg": f"candidate #{discovered_id} not found or not pending"}
+
+
+def reject_symbol(discovered_id: int, note: str = "user rejected") -> dict:
+    journal.init()
+    d = journal.get_discovered_symbol(discovered_id)
+    if not d or d["status"] != "pending":
+        return {"ok": False, "msg": "not pending"}
+    journal.reject_discovered_symbol(discovered_id, note)
+    return {"ok": True, "msg": f"rejected {d['symbol']} (won't be proposed again)"}
+
+
+def _format_symbol(d: dict) -> list[str]:
+    lines = [
+        f"  #{d['id']}  {d['symbol']}  ${d['price']:.2f}  via {d['source']}  best: {d['strategy']}",
+        f"       in-sample:     {d['is_expectancy_r']:+.3f}R over {d['is_trades']} trades",
+        f"       out-of-sample: {d['oos_expectancy_r']:+.3f}R over {d['oos_trades']} trades,"
+        f" {d['oos_win_rate']:.0%} win rate",
+        f"       risk/share at today's stop: ${d['risk_per_share']:.2f}",
+    ]
+    if d["oos_trades"] < LOW_SAMPLE_OOS_TRADES:
+        lines.append(f"       ! low sample (<{LOW_SAMPLE_OOS_TRADES} OOS trades) — "
+                     "directional only, not proof of an edge")
+    return lines
+
+
+def _interactive_symbols():
+    rows = pending_symbols()
+    if not rows:
+        print("No discovered symbols awaiting review.")
+        return
+    print(f"{len(rows)} discovered symbol(s) awaiting review.")
+    print("Approved symbols still only trade on a live signal + CLEAN morning verdict.\n")
+    for d in rows:
+        print("\n".join(_format_symbol(d)))
+        ans = input(f"       add {d['symbol']} to universe? [y]es / [n]o / [s]kip / [q]uit: ").strip().lower()
+        if ans in ("q", "quit"):
+            break
+        if ans in ("y", "yes"):
+            print("      ", approve_symbol(d["id"])["msg"])
+        elif ans in ("n", "no"):
+            print("      ", reject_symbol(d["id"])["msg"])
+        else:
+            print("       skipped (stays pending)")
+
+
 def main():
     p = argparse.ArgumentParser(description="review trades and optimizer proposals")
     p.add_argument("--list", action="store_true", help="list pending trades and exit")
     p.add_argument("--params", action="store_true",
                    help="review pending parameter improvement proposals")
+    p.add_argument("--symbols", action="store_true",
+                   help="review symbols proposed by weekly discovery")
     p.add_argument("--queue", nargs=2, metavar=("SYMBOL", "STRATEGY"),
                    help="manually queue and submit a trade (e.g. --queue VALE trend_momentum)")
     args = p.parse_args()
 
     if args.params:
         _interactive_params()
+        return
+    if args.symbols:
+        _interactive_symbols()
         return
     if args.list:
         for a in pending():

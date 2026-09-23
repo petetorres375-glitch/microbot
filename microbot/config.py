@@ -83,6 +83,21 @@ class Settings:
     # Set to false to exclude post-split stocks from the scan.
     include_split_stocks: bool = field(default_factory=lambda: _bool("INCLUDE_SPLIT_STOCKS", "true"))
 
+    # Symbols cut for diagnosed reasons (sizing, bad live record) — automated
+    # discovery must never re-propose these, whatever their backtest score.
+    universe_exclusions: List[str] = field(default_factory=lambda: [
+        s.strip().upper() for s in os.getenv("UNIVERSE_EXCLUSIONS", "AMD,ALAB,GOOG").split(",")
+        if s.strip()
+    ])
+
+    # Discovery's "does 1 share fit the risk budget" check sizes against the
+    # planned LIVE account, not STARTING_EQUITY (temporarily inflated in paper),
+    # so it never proposes symbols that will be untradable at go-live.
+    discovery_sizing_equity: float = float(os.getenv("DISCOVERY_SIZING_EQUITY", "5000"))
+
+    # Set to false to exclude discovery-approved symbols from the scan.
+    include_discovered_stocks: bool = field(default_factory=lambda: _bool("INCLUDE_DISCOVERED_STOCKS", "true"))
+
     # --- IPO universe: recent IPOs with limited price history.
     # Scanned with a shorter lookback (ipo_lookback_days) so limited history
     # doesn't cause data errors. Populate via IPO_UNIVERSE=TICK1,TICK2 in .env.

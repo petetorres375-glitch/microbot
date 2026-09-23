@@ -61,7 +61,7 @@ def strategy_r_stats(trades: List[Dict], tail_pct: float = 0.05) -> Dict:
 
 def _combined_universe() -> Tuple[List[str], Set[str], Set[str]]:
     """Same universe assembly screener.research() uses: main + dividend +
-    split + ipo symbols, deduplicated, with dividend/ipo membership tracked
+    split + discovery-approved + ipo symbols, deduplicated, with dividend/ipo membership tracked
     so each symbol gets backtested with the right strategy set and lookback."""
     dividend_set: Set[str] = set()
     ipo_set: Set[str] = set()
@@ -76,6 +76,12 @@ def _combined_universe() -> Tuple[List[str], Set[str], Set[str]]:
         for sym in settings.split_universe:
             sym = sym.strip().upper()
             if sym not in all_symbols:
+                all_symbols.append(sym)
+    if settings.include_discovered_stocks:
+        journal.init()
+        excluded = set(settings.universe_exclusions)
+        for sym in journal.fetch_approved_universe():
+            if sym not in excluded and sym not in all_symbols:
                 all_symbols.append(sym)
     if settings.include_ipo_stocks:
         manual = [s.strip().upper() for s in settings.ipo_universe if s.strip()]
