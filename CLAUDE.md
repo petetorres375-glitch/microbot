@@ -56,11 +56,11 @@ The bot's job is to:
 
 | Routine | ID | Schedule | Purpose |
 |---|---|---|---|
-| Pre-Market Diagnostics | `trig_01RGqaa5TuyTVHn2ThGDmxSg` | Weekdays 7:30 AM ET | Full system check: credentials, Alpaca, open position stop audit, DB, git, core imports. GO/NO-GO verdict with ~2 hours to fix before trading starts |
+| Pre-Market Diagnostics | `trig_01RGqaa5TuyTVHn2ThGDmxSg` | Weekdays 7:30 AM ET | Full system check: credentials, Alpaca, open position stop audit, DB, git, core imports. GO/NO-GO verdict with ~2 hours to fix before trading starts. **2026-09-24:** prompt no longer writes (stale) Alpaca creds; told to treat credential/Alpaca/stop-audit/DB failures as sandbox false positives and grade GO/NO-GO on verdicts + imports + git only |
 | Morning signal analysis | `trig_019TFaNMJyiH1atY2kykNHGD` | Weekdays 8:30 AM ET | Web-searches news on universe, delivers CLEAN/CAUTION/AVOID verdicts, writes `morning_verdicts_ccr.json` to Google Drive folder (GitHub push blocked by CCR proxy) |
 | Intraday pre-market scanner | `trig_01TX4CDGSGMLscLLgtkgeKAr` | Weekdays 9:15 AM ET | Runs gap scanner, web-searches news on candidates, prints CLEAN/MIXED/AVOID DAY briefing |
-| Daily research scan | `trig_019qsZJECstukLDhqDFXcv6R` | ~~Weekdays 9:35 AM ET~~ | **DISABLED 2026-09-24.** Never worked from CCR (data API blocked, see below) and sent a daily "unreachable" notification; local `run_research.py` cron (9:41 AM) does the job. Its prompt also embedded the live Google service-account private key (`bc1596…`) in plaintext — prompt scrubbed and key rotated same day (new key `bf509a…` in `service_account.json`; old `bc1596…` and an unused May-30 key `b522e1…` deleted in Google Cloud; loose key files removed from `~/Downloads`) |
-| Weekly optimizer | `trig_01PYxALzYVnZuA88Kpror5Qo` | Mondays 9:00 AM ET | Walk-forward grid search, pushes `optimizer_proposals.json` to repo if improvements found. **Non-functional from CCR (confirmed 2026-07-06)** — see networking limitations below |
+| Daily research scan | `trig_019qsZJECstukLDhqDFXcv6R` | ~~Weekdays 9:35 AM ET~~ | **DISABLED 2026-09-24.** Never worked from CCR (data API blocked, see below) and sent a daily "unreachable" notification; local `run_research.py` cron (9:41 AM) does the job. Its prompt also embedded the live Google service-account private key (`bc1596…`) in plaintext — prompt scrubbed and key rotated same day. Same day, all routine prompts scanned — none contain any credentials now (new key `bf509a…` in `service_account.json`; old `bc1596…` and an unused May-30 key `b522e1…` deleted in Google Cloud; loose key files removed from `~/Downloads`) |
+| Weekly optimizer | `trig_01PYxALzYVnZuA88Kpror5Qo` | ~~Mondays 9:00 AM ET~~ | **DISABLED 2026-09-24** — never worked from CCR; local `run_optimizer.py` cron (Mon 6 AM) does the job |
 
 View routine results at: https://claude.ai/code/routines
 
