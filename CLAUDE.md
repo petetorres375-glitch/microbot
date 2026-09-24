@@ -460,16 +460,16 @@ Per user instruction (2026-07-01): watch for SPCX to reclaim the prior entry pri
 
 **`ema_pullback` paused 2026-07-15** via `DISABLED_STRATEGIES=ema_pullback` in `.env` (mechanism: `settings.disabled_strategies`, checked in `build_default_strategies()`/`build_strategies_from_params()` in `microbot/strategies.py`, commit `eaa10bf`). Reason: worst-performing strategy in the journal (14% win rate, −0.80R expectancy, −$277.85 over 7 trades) and the optimizer structurally can't tune it — see "Optimizer params updated 2026-07-13" correction below. Blocks new signals only; any existing positions opened by this strategy are unaffected and still managed normally by `trail.py`. `.env` is gitignored, so this pause is local-machine-only — doesn't need a push to take effect, but won't survive a fresh `.env` setup elsewhere. To resume: remove `ema_pullback` from `DISABLED_STRATEGIES` (or delete the line).
 
-**Portfolio state as of 2026-09-24 3:42 PM ET** (supersedes the 2026-09-17 snapshot below — kept for history): 4 of 8 `MAX_OPEN_POSITIONS` slots — **AEHR, AMZN, BAC, RLAY**, -$445.73 unrealized (-0.89% of $50,000 paper starting equity).
+**Portfolio state as of 2026-09-24 market close** (supersedes the 2026-09-17 snapshot below — kept for history): 4 of 8 `MAX_OPEN_POSITIONS` slots — **AEHR, AMZN, BAC, RLAY**, -$463.37 unrealized (-0.93% of $50,000 paper starting equity).
 
 | Symbol | Strategy | Shares | Entry | Price | Unrealized | Live Stop | Room to stop |
 |---|---|---|---|---|---|---|---|
-| AEHR | rsi2_reversion | 1 | $96.50 | $97.46 | +$0.96 | $57.73 | far |
-| AMZN | rsi2_reversion | 2 | $262.04 | $249.45 | -$25.18 | $238.24 | 4.5% |
-| BAC | rsi2_reversion | 134 | $59.09 | $56.15 | -$394.91 | $55.38 | 1.4% |
-| RLAY | trend_momentum | 20 | $18.96 | $17.63 | -$26.60 | $16.47 | 6.6% |
+| AEHR | rsi2_reversion | 1 | $96.50 | $96.89 | +$0.39 | $57.73 | far |
+| AMZN | rsi2_reversion | 2 | $262.04 | $248.91 | -$26.26 | $238.24 | 4.3% |
+| BAC | rsi2_reversion | 134 | $59.09 | $56.01 | -$412.89 | $55.38 | 1.1% |
+| RLAY | trend_momentum | 20 | $18.96 | $17.73 | -$24.60 | $16.47 | 7.1% |
 
-Three stop-outs since 9/17, all ordinary stops (no bugs): **ET** (`dividend_momentum`) 9/22 -$527.34 (-1.07R), **EPD** (`dividend_momentum`) 9/23 -$463.22 (-0.96R), **F** (`rsi2_reversion`) 9/24 3:30 PM -$47.91 (-0.97R) — -$1,038.47 realized in 3 days. `dividend_momentum`, the best swing strategy as of 9/14 (75% WR), lost both. BAC was 77¢ above its stop at snapshot time (a stop-out would be ~-$495, -1R). Journal matched Alpaca (reconcile current); trail made no adjustments (nothing at +1R).
+Three stop-outs since 9/17, all ordinary stops (no bugs): **ET** (`dividend_momentum`) 9/22 -$527.34 (-1.07R), **EPD** (`dividend_momentum`) 9/23 -$463.22 (-0.96R), **F** (`rsi2_reversion`) 9/24 3:30 PM -$47.91 (-0.97R) — -$1,038.47 realized in 3 days. `dividend_momentum`, the best swing strategy as of 9/14 (75% WR), lost both. BAC closed 63¢ above its stop and was held overnight (a stop-out would be ~-$495, -1R; an opening gap could fill below $55.38). Journal matched Alpaca (reconcile current); trail made no adjustments (nothing at +1R).
 
 **Portfolio state as of 2026-09-17 market close** (superseded by the 2026-09-24 snapshot above; itself superseded the 2026-08-10 snapshot below — kept for history; several intervening snapshots between 8/10 and 9/17 were tracked only in session memory and never written here): 7 of 8 `MAX_OPEN_POSITIONS` slots — **AEHR, AMZN, BAC, EPD, ET, F, RLAY**, -$495.18 unrealized (-0.99% of $50,000 paper starting equity, currently inflated per the `.env` note below).
 
