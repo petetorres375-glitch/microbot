@@ -32,3 +32,19 @@ def test_below_min_trades_is_not_judged(monkeypatch):
     rows = [("rsi2_reversion", "F", -50.0, -1.0)] * 5
     monkeypatch.setattr(journal, "fetch_trades", lambda: _trades(rows))
     assert feedback.compute_vetoes()["setups"] == set()
+
+
+def test_noisy_one_to_one_record_is_not_vetoed(monkeypatch):
+    # rsi2_reversion's live record + 1W/1L: avg R is negative, but 2 wins in 6
+    # at 1:1 is well within noise for a real ~55-60% strategy.
+    rows = [("rsi2_reversion", "F", 50.0, 1.035), ("rsi2_reversion", "F", -45.0, -0.938),
+            ("rsi2_reversion", "F", -45.0, -0.977), ("rsi2_reversion", "F", -45.0, -0.972),
+            ("rsi2_reversion", "F", 50.0, 1.0), ("rsi2_reversion", "F", -45.0, -1.0)]
+    monkeypatch.setattr(journal, "fetch_trades", lambda: _trades(rows))
+    assert "rsi2_reversion" not in feedback.compute_vetoes()["setups"]
+
+
+def test_clearly_bad_record_is_still_vetoed(monkeypatch):
+    rows = [("rsi2_reversion", "F", 50.0, 1.035)] + [("rsi2_reversion", "F", -45.0, -0.97)] * 5
+    monkeypatch.setattr(journal, "fetch_trades", lambda: _trades(rows))
+    assert "rsi2_reversion" in feedback.compute_vetoes()["setups"]
