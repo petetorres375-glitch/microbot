@@ -405,6 +405,12 @@ Prompted by the user asking for R-expectancy to be raised without sacrificing wi
 
 **Live change made (approved same day):** `Breakout.trend_filter` (default `True`) — see the `breakout` strategy class docstring in `microbot/strategies.py` for the validated numbers. This is the only strategy change adopted from the whole review; everything else (Tasks 2-5, and `trend_momentum`/`breakout_52w` from Task 6) concluded "don't change it," backed by real IS/OOS evidence rather than the full-sample numbers alone.
 
+## Analyzer veto switched from $ to R expectancy (2026-09-25)
+
+`feedback.compute_vetoes()` (the "vetoed by analyzer:" lines in `engine.log`) blocks any strategy — or strategy+symbol combo — with 6+ closed swing trades and expectancy <= 0. It used to average **dollar** P&L, which broke when `STARTING_EQUITY` went $5k -> $50k on 2026-08-28: post-change trades are ~10x the dollar size, so one loss outweighed ~10 earlier wins. `dividend_momentum` (+0.09R over 10 trades, 60% WR, the only positive-R swing strategy) was vetoed from 2026-09-23 purely because ET (-$527) and EPD (-$463) stopped out at the new size. Now judged on `analyzer.expectancy_r()` (average R, size-independent); the dollar figure is still shown in the table for the dashboard. Only live effect at switch time: `dividend_momentum` unblocked. Still vetoed: `breakout` (-0.86R), `trend_momentum` (-0.47R), `ema_pullback` (-0.80R, also disabled), `manual` (-0.47R). Tests: `tests/test_feedback.py`.
+
+Known open issues, not changed: (1) no time window — `trend_momentum`'s veto is mostly pre-7/13-retune losses (GOOG era) that will count forever; (2) `rsi2_reversion` is at 4 trades / -0.46R — two more losers puts it at 6 and vetoes it, which would leave **no** strategy able to open a swing trade.
+
 ## Symbol discovery pipeline (2026-09-22)
 
 Prompted by the user asking whether to clear the universe and let the bot find profitable stocks itself. Decision: **don't clear it** (AMD/ALAB/GOOG were cut for documented reasons a fresh scan would forget) — **add a human-gated discovery layer on top**, same "nothing auto-promoted" rule as the optimizer's `param_proposals`.
