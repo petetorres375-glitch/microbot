@@ -468,7 +468,21 @@ Per user instruction (2026-07-01): watch for SPCX to reclaim the prior entry pri
 
 **`ema_pullback` paused 2026-07-15** via `DISABLED_STRATEGIES=ema_pullback` in `.env` (mechanism: `settings.disabled_strategies`, checked in `build_default_strategies()`/`build_strategies_from_params()` in `microbot/strategies.py`, commit `eaa10bf`). Reason: worst-performing strategy in the journal (14% win rate, −0.80R expectancy, −$277.85 over 7 trades) and the optimizer structurally can't tune it — see "Optimizer params updated 2026-07-13" correction below. Blocks new signals only; any existing positions opened by this strategy are unaffected and still managed normally by `trail.py`. `.env` is gitignored, so this pause is local-machine-only — doesn't need a push to take effect, but won't survive a fresh `.env` setup elsewhere. To resume: remove `ema_pullback` from `DISABLED_STRATEGIES` (or delete the line).
 
-**Portfolio state as of 2026-09-24 market close** (supersedes the 2026-09-17 snapshot below — kept for history): 4 of 8 `MAX_OPEN_POSITIONS` slots — **AEHR, AMZN, BAC, RLAY**, -$463.37 unrealized (-0.93% of $50,000 paper starting equity).
+**Portfolio state as of 2026-09-25 market close** (supersedes the 2026-09-24 snapshot below — kept for history): 7 of 8 `MAX_OPEN_POSITIONS` slots — **AEHR, AMZN, BAC, HOOD, IONQ, RLAY, T**, -$255.95 unrealized (-0.51% of $50,000 paper starting equity). No closes, trail made no adjustments all day.
+
+| Symbol | Strategy | Shares | Entry | Close | Unrealized | Live Stop |
+|---|---|---|---|---|---|---|
+| AEHR | rsi2_reversion | 1 | $96.50 | $104.27 | +$7.77 | $57.73 |
+| AMZN | rsi2_reversion | 2 | $262.04 | $249.50 | -$25.08 | $238.24 |
+| BAC | rsi2_reversion | 134 | $59.09 | $56.69 | -$322.22 | $55.38 |
+| HOOD | trend_momentum | 40 | $118.41 | $118.61 | +$8.00 | $106.63 |
+| IONQ | trend_momentum | 92 | $44.54 | $45.38 | +$77.28 | $39.23 |
+| RLAY | trend_momentum | 20 | $18.96 | $17.47 | -$29.80 | $16.47 |
+| T | trend_momentum | 434 | $25.30 | $25.36 | +$28.09 | $24.15 |
+
+HOOD/IONQ/T are the first trades after the 2026-09-25 analyzer-veto fixes (see that section): the 9:35 cron run vetoed all 3 `trend_momentum` signals under the old $-based rule; after the fixes, a **manual engine rerun at 10:04 AM** (logged in `engine.log` under `=== manual run`) executed T, IONQ, HOOD (TSLA skipped: tech sector cap 3; BAC signal skipped: already held). `run_research.py` was also rerun manually at 11:43 to refresh the Sheets Positions/DailyTrades tabs.
+
+**Portfolio state as of 2026-09-24 market close** (superseded by the 2026-09-25 snapshot above; itself superseded the 2026-09-17 snapshot below — kept for history): 4 of 8 `MAX_OPEN_POSITIONS` slots — **AEHR, AMZN, BAC, RLAY**, -$463.37 unrealized (-0.93% of $50,000 paper starting equity).
 
 | Symbol | Strategy | Shares | Entry | Price | Unrealized | Live Stop | Room to stop |
 |---|---|---|---|---|---|---|---|
