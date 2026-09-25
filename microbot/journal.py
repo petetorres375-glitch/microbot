@@ -354,6 +354,13 @@ def fetch_active_params() -> Dict:
     return {r["strategy"]: _json.loads(r["params_json"]) for r in rows}
 
 
+def fetch_promoted_dates() -> Dict[str, str]:
+    """Returns {strategy_name: promoted_ts} — when each strategy's current params went live."""
+    with _conn() as con:
+        rows = con.execute("SELECT strategy, promoted_ts FROM active_params").fetchall()
+    return {r["strategy"]: r["promoted_ts"] for r in rows if r["promoted_ts"]}
+
+
 def save_param_proposal(p: Dict) -> int:
     """Saves an optimizer proposal. Returns the new proposal id."""
     import json as _json

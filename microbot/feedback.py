@@ -18,6 +18,12 @@ A negative average isn't enough on its own: a 1:1 strategy like rsi2_reversion
 with a real 60% win rate still shows avg R <= 0 after 6 trades ~46% of the time.
 So we only veto when the losing record is clear — average R plus `z` standard
 errors is still below `min_expectancy`.
+
+Only trades ENTERED under a strategy's current params count: once the optimizer
+promotes new params (active_params.promoted_ts), the old version's record no
+longer says anything about the strategy that's actually running. Entry time
+comes from the matching order row (trades only store the close time), so a
+position opened before a retune and closed after it is still excluded.
 """
 from __future__ import annotations
 
@@ -26,7 +32,7 @@ from typing import Set, Tuple
 
 import pandas as pd
 
-from . import analyzer
+from . import analyzer, journal
 
 
 @dataclass
@@ -45,11 +51,41 @@ def _clearly_losing(g: pd.DataFrame, cfg: FeedbackConfig) -> bool:
     return float(r.mean()) + cfg.z * se < cfg.min_expectancy
 
 
+def _entered_under_current_params(df: pd.DataFrame) -> pd.DataFrame:
+    """Drop trades entered before their strategy's current params were promoted.
+    Strategies that were never promoted keep their full history."""
+    promoted = {k: pd.Timestamp(v) for k, v in journal.fetch_promoted_dates().items()}
+    if not promoted:
+        return df
+    orders = pd.DataFrame(journal.fetch_orders(limit=1_000_000))
+    if not orders.empty:
+        orders["entered"] = pd.to_datetime(orders["ts"], format="mixed", utc=True)
+    closed = pd.to_datetime(df["ts"], format="mixed", utc=True)
+
+    keep = []
+    for i, row in df.iterrows():
+        since = promoted.get(row["strategy"])
+        if since is None:
+            keep.append(True)
+            continue
+        entered = closed[i]  # fallback if no matching order row exists
+        if not orders.empty:
+            m = orders[(orders["symbol"] == row["symbol"])
+                       & (orders["strategy"] == row["strategy"])
+                       & (orders["entered"] <= closed[i])]
+            if not m.empty:
+                entered = m["entered"].max()
+        keep.append(entered >= since)
+    return df[keep]
+
+
 def compute_vetoes(cfg: FeedbackConfig = FeedbackConfig()) -> dict:
     """Return {'setups': set, 'symbols': set, 'combos': set, 'table': df}."""
     # analyzer.frame() already excludes zero-P&L reconciliation artifacts,
     # so min_trades counts real fills only.
     df = analyzer.frame()
+    if not df.empty:
+        df = _entered_under_current_params(df)
     if df.empty:
         return {"setups": set(), "symbols": set(), "combos": set(),
                 "table": pd.DataFrame()}

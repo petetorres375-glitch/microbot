@@ -1,5 +1,14 @@
 """Tests for feedback.compute_vetoes — the analyzer veto loop judges in R, not $."""
+import pytest
+
 from microbot import feedback, journal
+
+
+@pytest.fixture(autouse=True)
+def _no_real_journal(monkeypatch):
+    # Default: no promoted params, no orders — tests opt in where needed.
+    monkeypatch.setattr(journal, "fetch_promoted_dates", lambda: {})
+    monkeypatch.setattr(journal, "fetch_orders", lambda limit=200: [])
 
 
 def _trades(rows):
@@ -48,3 +57,36 @@ def test_clearly_bad_record_is_still_vetoed(monkeypatch):
     rows = [("rsi2_reversion", "F", 50.0, 1.035)] + [("rsi2_reversion", "F", -45.0, -0.97)] * 5
     monkeypatch.setattr(journal, "fetch_trades", lambda: _trades(rows))
     assert "rsi2_reversion" in feedback.compute_vetoes()["setups"]
+
+
+def test_trades_entered_before_retune_are_ignored(monkeypatch):
+    # 6 losers under old params, then a retune: the new version starts clean.
+    rows = [("trend_momentum", "GOOG", -50.0, -1.0)] * 6
+    monkeypatch.setattr(journal, "fetch_trades", lambda: _trades(rows))
+    monkeypatch.setattr(journal, "fetch_promoted_dates",
+                        lambda: {"trend_momentum": "2026-09-20T00:00:00+00:00"})
+    assert feedback.compute_vetoes()["setups"] == set()
+
+
+def test_window_uses_entry_time_not_close_time(monkeypatch):
+    # Closed after the retune but ENTERED before it -> old params, excluded.
+    rows = [("breakout", "NOK", -50.0, -1.0)] * 6   # closes 2026-09-01..06
+    monkeypatch.setattr(journal, "fetch_trades", lambda: _trades(rows))
+    monkeypatch.setattr(journal, "fetch_promoted_dates",
+                        lambda: {"breakout": "2026-08-15T00:00:00+00:00"})
+    monkeypatch.setattr(journal, "fetch_orders", lambda limit=200: [
+        {"ts": "2026-08-10T13:35:00+00:00", "symbol": "NOK", "strategy": "breakout"}])
+    assert feedback.compute_vetoes()["setups"] == set()
+
+    # Same trades entered after the retune -> they count, and they're clearly losing.
+    monkeypatch.setattr(journal, "fetch_orders", lambda limit=200: [
+        {"ts": "2026-08-20T13:35:00+00:00", "symbol": "NOK", "strategy": "breakout"}])
+    assert "breakout" in feedback.compute_vetoes()["setups"]
+
+
+def test_never_promoted_strategy_keeps_full_history(monkeypatch):
+    rows = [("manual", "F", -50.0, -1.0)] * 6
+    monkeypatch.setattr(journal, "fetch_trades", lambda: _trades(rows))
+    monkeypatch.setattr(journal, "fetch_promoted_dates",
+                        lambda: {"breakout": "2026-09-20T00:00:00+00:00"})
+    assert "manual" in feedback.compute_vetoes()["setups"]
