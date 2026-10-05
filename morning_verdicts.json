@@ -1,5 +1,5 @@
 {
-  "date": "2026-10-02",
+  "date": "2026-10-05",
   "verdicts": {
     "F": "CLEAN",
     "SOFI": "CLEAN",
@@ -16,7 +16,7 @@
     "UBER": "CLEAN",
     "WBD": "CLEAN",
     "GRAB": "CLEAN",
-    "VALE": "CLEAN",
+    "VALE": "CAUTION",
     "RIG": "CLEAN",
     "CCL": "CLEAN",
     "KVUE": "CLEAN",
@@ -53,7 +53,7 @@
     "TSLA": "CLEAN",
     "AMZN": "CLEAN",
     "SHOP": "CLEAN",
-    "BFLY": "CLEAN",
-    "NU": "CLEAN"
+    "BFLY": "CAUTION",
+    "NU": "CAUTION"
   }
 }
