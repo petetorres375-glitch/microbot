@@ -57,7 +57,7 @@ The bot's job is to:
 | Routine | ID | Schedule | Purpose |
 |---|---|---|---|
 | Pre-Market Diagnostics | `trig_01RGqaa5TuyTVHn2ThGDmxSg` | Weekdays 7:30 AM ET | Full system check: credentials, Alpaca, open position stop audit, DB, git, core imports. GO/NO-GO verdict with ~2 hours to fix before trading starts. **2026-09-24:** prompt no longer writes (stale) Alpaca creds; told to treat credential/Alpaca/stop-audit/DB failures as sandbox false positives and grade GO/NO-GO on verdicts + imports + git only |
-| Morning signal analysis | `trig_019TFaNMJyiH1atY2kykNHGD` | Weekdays 8:30 AM ET | Web-searches news on universe, delivers CLEAN/CAUTION/AVOID verdicts, writes `morning_verdicts_ccr.json` to Google Drive folder (GitHub push blocked by CCR proxy) |
+| Morning signal analysis | `trig_019TFaNMJyiH1atY2kykNHGD` | Weekdays 8:30 AM ET | **Prompt made fail-closed 2026-10-08** (see section below). Web-searches news on every universe symbol, delivers CLEAN/CAUTION/AVOID verdicts, writes `morning_verdicts_ccr.json` to Google Drive folder (GitHub push blocked by CCR proxy) |
 | Intraday pre-market scanner | `trig_01TX4CDGSGMLscLLgtkgeKAr` | Weekdays 9:15 AM ET | Runs gap scanner, web-searches news on candidates, prints CLEAN/MIXED/AVOID DAY briefing |
 | Daily research scan | `trig_019qsZJECstukLDhqDFXcv6R` | ~~Weekdays 9:35 AM ET~~ | **DISABLED 2026-09-24.** Never worked from CCR (data API blocked, see below) and sent a daily "unreachable" notification; local `run_research.py` cron (9:41 AM) does the job. Its prompt also embedded the live Google service-account private key (`bc1596…`) in plaintext — prompt scrubbed and key rotated same day. Same day, all routine prompts scanned — none contain any credentials now (new key `bf509a…` in `service_account.json`; old `bc1596…` and an unused May-30 key `b522e1…` deleted in Google Cloud; loose key files removed from `~/Downloads`) |
 | Weekly optimizer | `trig_01PYxALzYVnZuA88Kpror5Qo` | ~~Mondays 9:00 AM ET~~ | **DISABLED 2026-09-24** — never worked from CCR; local `run_optimizer.py` cron (Mon 6 AM) does the job |
@@ -404,6 +404,22 @@ Prompted by the user asking for R-expectancy to be raised without sacrificing wi
 **Task 7 (allocation proposal):** delivered as an honest reversal of the original hypothesis — the data supports weighting toward `breakout`/momentum, not mean reversion. `mean_reversion` excluded from consideration (already fires zero live signals anyway under current settings). `breakout_52w`'s promising OOS number (+0.601R) rests on only 47 trades — flagged as unresolved, not confirmed, needs more live data before trusting it. No slot-quota mechanism exists in the bot (positions fill by ranked CLEAN signals, not a reserved-slots system) — implementing one would be new code, not something this review built.
 
 **Live change made (approved same day):** `Breakout.trend_filter` (default `True`) — see the `breakout` strategy class docstring in `microbot/strategies.py` for the validated numbers. This is the only strategy change adopted from the whole review; everything else (Tasks 2-5, and `trend_momentum`/`breakout_52w` from Task 6) concluded "don't change it," backed by real IS/OOS evidence rather than the full-sample numbers alone.
+
+## Morning verdict gate fixed: fail-closed prompt (2026-10-08)
+
+From 2026-09-29 the Morning Signal Analysis routine (`trig_019TFaNMJyiH1atY2kykNHGD`) stopped researching the universe. The prompt was unchanged, but the routine's model moved from claude-sonnet-5 to claude-sonnet-5-5. It now news-searched only the 6 names hardcoded in old Step 5, then used a script to mark every other symbol CLEAN. The old prompt allowed this: Step 4 only required searching "movers or names in the news", and the rules said "Symbols with no news default to CLEAN". Run time dropped from about 4 minutes to about 1, and searches from about 50 to 8. Verdicts went from a baseline of about 70% CLEAN with 1–2 AVOIDs a day to about 93% CLEAN with zero AVOIDs for 8 trading days. On 10/8 its searches failed and it carried 10/7's verdicts forward, and BB was bought on that unresearched CLEAN.
+
+**Fix:** the prompt was rewritten and is fail-closed:
+- Every symbol must get its own news search in that run.
+- An unresearched symbol, or one whose search failed, gets CAUTION, never CLEAN.
+- Prior verdicts are never reused.
+- If search broadly fails, every symbol is CAUTION and the bot sits the day out.
+- Verdicts are written out explicitly per symbol (no defaulting comprehension), and the run must print a per-symbol coverage table plus "Researched X of N".
+- Stale text was removed: "human approval gate", "10am", and the hardcoded Step 5 scores.
+
+Separately, `config.py`'s `DIVIDEND_UNIVERSE` default was synced to `.env`'s 5 names (commit `e109942`). The routine reads `config.py`, not `.env`, so it had still been giving verdicts to the 7 dividend names dropped 2026-06-26.
+
+**If a verdict file ever looks too clean again**, pull the run with `RemoteTrigger list_runs` / `get_run_log` and count the per-symbol searches before trusting it. A run under ~2 minutes is a red flag.
 
 ## Analyzer veto switched from $ to R expectancy (2026-09-25)
 
