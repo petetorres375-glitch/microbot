@@ -50,16 +50,13 @@ class Settings:
     ).split(","))
 
     # --- Dividend universe: income-focused, lower-beta names. ---
-    # All priced under ~$55 so they're reachable on a $500 account.
-    # VZ, MO, BTI, ET, AGNC, NLY: high-yield income plays.
-    # EPD, KMI: energy infrastructure MLPs with 7-8% yield.
-    # STAG: monthly-paying industrial REIT.
-    # ABBV: dividend-growth pharma (yield ~4%).
-    # CVX: oil major with 4%+ yield and buybacks.
-    # O: Realty Income "monthly dividend company" (~5% yield).
+    # Trimmed 2026-06-26 to the 5 backtest-positive names. Dropped VZ, AGNC,
+    # NLY, STAG (negative expectancy), CVX (flat), ABBV (deep drawdown), O (too
+    # few trades). Keep this default in sync with .env: the morning verdicts
+    # routine reads this file, not .env.
     dividend_universe: List[str] = field(default_factory=lambda: os.getenv(
         "DIVIDEND_UNIVERSE",
-        "VZ,MO,BTI,ET,AGNC,NLY,EPD,KMI,STAG,ABBV,CVX,O"
+        "KMI,BTI,ET,MO,EPD"
     ).split(","))
 
     # Set to false to exclude dividend stocks from the scan.
