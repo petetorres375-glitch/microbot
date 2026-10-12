@@ -1,5 +1,5 @@
 {
-  "date": "2026-10-09",
+  "date": "2026-10-12",
   "verdicts": {
     "F": "CAUTION",
     "SOFI": "CAUTION",
@@ -36,7 +36,7 @@
     "QBTS": "CAUTION",
     "QS": "CAUTION",
     "BBAI": "CAUTION",
-    "WDFC": "CAUTION",
+    "WDFC": "CLEAN",
     "KMI": "CAUTION",
     "BTI": "CAUTION",
     "ET": "CAUTION",
