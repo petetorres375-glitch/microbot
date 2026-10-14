@@ -1,14 +1,14 @@
 {
-  "date": "2026-10-13",
+  "date": "2026-10-14",
   "verdicts": {
     "F": "CAUTION",
     "SOFI": "CAUTION",
-    "PLTR": "CLEAN",
+    "PLTR": "CAUTION",
     "NIO": "CLEAN",
     "INTC": "CAUTION",
     "T": "CAUTION",
     "BAC": "CAUTION",
-    "PFE": "CLEAN",
+    "PFE": "CAUTION",
     "CSCO": "CAUTION",
     "HOOD": "CAUTION",
     "RIVN": "CAUTION",
@@ -41,12 +41,12 @@
     "BTI": "CAUTION",
     "ET": "CAUTION",
     "MO": "CAUTION",
-    "EPD": "CLEAN",
+    "EPD": "CAUTION",
     "NVDA": "CAUTION",
     "TSLA": "CAUTION",
     "AMZN": "CAUTION",
     "SHOP": "CAUTION",
-    "BFLY": "CAUTION",
+    "BFLY": "CLEAN",
     "NU": "CAUTION"
   }
 }
