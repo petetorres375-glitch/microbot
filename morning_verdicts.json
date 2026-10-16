@@ -1,10 +1,10 @@
 {
-  "date": "2026-10-14",
+  "date": "2026-10-16",
   "verdicts": {
     "F": "CAUTION",
     "SOFI": "CAUTION",
     "PLTR": "CAUTION",
-    "NIO": "CLEAN",
+    "NIO": "CAUTION",
     "INTC": "CAUTION",
     "T": "CAUTION",
     "BAC": "CAUTION",
@@ -46,7 +46,7 @@
     "TSLA": "CAUTION",
     "AMZN": "CAUTION",
     "SHOP": "CAUTION",
-    "BFLY": "CLEAN",
+    "BFLY": "CAUTION",
     "NU": "CAUTION"
   }
 }
