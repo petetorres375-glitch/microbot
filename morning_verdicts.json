@@ -1,17 +1,17 @@
 {
-  "date": "2026-10-19",
+  "date": "2026-10-20",
   "verdicts": {
     "F": "CAUTION",
     "SOFI": "CAUTION",
-    "PLTR": "CLEAN",
-    "NIO": "CLEAN",
+    "PLTR": "CAUTION",
+    "NIO": "CAUTION",
     "INTC": "CAUTION",
     "T": "CAUTION",
     "BAC": "CAUTION",
     "PFE": "CAUTION",
     "CSCO": "CAUTION",
     "HOOD": "CAUTION",
-    "RIVN": "CLEAN",
+    "RIVN": "CAUTION",
     "SNAP": "CAUTION",
     "UBER": "CAUTION",
     "WBD": "CAUTION",
@@ -32,7 +32,6 @@
     "RDW": "CAUTION",
     "LUNR": "CAUTION",
     "RGTI": "CAUTION",
-    "IONQ": "AVOID",
     "QBTS": "CAUTION",
     "QS": "CAUTION",
     "BBAI": "CAUTION",
@@ -42,11 +41,12 @@
     "ET": "CAUTION",
     "MO": "CAUTION",
     "EPD": "CAUTION",
-    "NVDA": "CLEAN",
+    "NVDA": "CAUTION",
     "TSLA": "CAUTION",
     "AMZN": "CAUTION",
-    "SHOP": "CLEAN",
-    "BFLY": "CLEAN",
-    "NU": "CAUTION"
+    "SHOP": "CAUTION",
+    "BFLY": "CAUTION",
+    "NU": "CAUTION",
+    "IONQ": "AVOID"
   }
 }
