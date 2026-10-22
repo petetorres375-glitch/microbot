@@ -1,5 +1,5 @@
 {
-  "date": "2026-10-21",
+  "date": "2026-10-22",
   "verdicts": {
     "F": "CAUTION",
     "SOFI": "CAUTION",
@@ -32,7 +32,7 @@
     "RDW": "CAUTION",
     "LUNR": "CAUTION",
     "RGTI": "CAUTION",
-    "IONQ": "AVOID",
+    "IONQ": "CAUTION",
     "QBTS": "CAUTION",
     "QS": "CAUTION",
     "BBAI": "CAUTION",
@@ -42,7 +42,7 @@
     "ET": "CAUTION",
     "MO": "CAUTION",
     "EPD": "CAUTION",
-    "NVDA": "CLEAN",
+    "NVDA": "CAUTION",
     "TSLA": "CAUTION",
     "AMZN": "CAUTION",
     "SHOP": "CAUTION",
