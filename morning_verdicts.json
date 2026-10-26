@@ -1,5 +1,5 @@
 {
-  "date": "2026-10-23",
+  "date": "2026-10-26",
   "verdicts": {
     "F": "CAUTION",
     "SOFI": "CAUTION",
@@ -7,7 +7,7 @@
     "NIO": "CAUTION",
     "INTC": "CAUTION",
     "T": "CLEAN",
-    "BAC": "CLEAN",
+    "BAC": "CAUTION",
     "PFE": "CAUTION",
     "CSCO": "CAUTION",
     "HOOD": "CAUTION",
@@ -33,7 +33,7 @@
     "LUNR": "CAUTION",
     "RGTI": "CAUTION",
     "IONQ": "CAUTION",
-    "QBTS": "AVOID",
+    "QBTS": "CAUTION",
     "QS": "CAUTION",
     "BBAI": "CAUTION",
     "WDFC": "CAUTION",
